@@ -1,0 +1,6 @@
+pnpm exec lint-staged
+
+# Secret scan on staged changes (no-op if gitleaks isn't installed locally; CI enforces it).
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --config .gitleaks.toml
+fi

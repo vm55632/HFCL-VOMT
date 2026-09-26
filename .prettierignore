@@ -1,0 +1,10 @@
+node_modules
+dist
+build
+.next
+out
+coverage
+pnpm-lock.yaml
+*.md.snap
+apps/api/src/prisma/generated
+sbom.json

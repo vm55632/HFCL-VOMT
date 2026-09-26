@@ -1,0 +1,46 @@
+{
+  "name": "vop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Enterprise Vendor Onboarding Platform — security-first, cloud-agnostic, on-prem first.",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20 <23"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "test:cov": "turbo run test:cov",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\"",
+    "compose:up": "docker compose -f infra/docker/docker-compose.yml up -d",
+    "compose:down": "docker compose -f infra/docker/docker-compose.yml down",
+    "compose:logs": "docker compose -f infra/docker/docker-compose.yml logs -f",
+    "sbom": "cyclonedx-npm --output-file sbom.json || echo 'install @cyclonedx/cyclonedx-npm to generate an SBOM'",
+    "prepare": "husky || true"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.5.0",
+    "@commitlint/config-conventional": "^19.5.0",
+    "@eslint/js": "^9.12.0",
+    "eslint": "^9.12.0",
+    "globals": "^15.11.0",
+    "husky": "^9.1.6",
+    "lint-staged": "^15.2.10",
+    "prettier": "^3.3.3",
+    "turbo": "^2.2.3",
+    "typescript": "^5.6.3",
+    "typescript-eslint": "^8.8.1"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ]
+  }
+}

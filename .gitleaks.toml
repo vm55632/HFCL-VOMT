@@ -1,0 +1,21 @@
+# gitleaks configuration — runs in the pre-commit hook and in CI.
+# Extends the default rule set; add project-specific allowlists below.
+title = "VOP gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Files that legitimately contain example/placeholder secrets."
+paths = [
+  '''\.env\.example$''',
+  '''.*\.example$''',
+  '''infra/docker/keycloak/.*realm.*\.json$''',
+  '''docs/.*''',
+]
+# Placeholder tokens used in docs and examples — never real.
+regexes = [
+  '''(?i)changeme''',
+  '''(?i)example\.(com|local|test)''',
+  '''sb_secret_xxx''',
+]

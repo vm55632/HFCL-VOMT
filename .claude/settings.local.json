@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:/Users/Vishal/OneDrive/Desktop/Project for EY/VOMT Onprem\" && mkdir -p docs/adr docs/security docs/runbooks && cp \"C:/Users/Vishal/Downloads/vendor-onboarding-claude-code-prompt.md\" docs/BUILD_PROMPT.md && ls -la docs && echo \"copied: $\\(wc -l < docs/BUILD_PROMPT.md\\) lines\")",
+      "Bash(npm install *)",
+      "Bash(npx tsc *)",
+      "Bash(echo \"TSC_EXIT=$?\")",
+      "Bash(npx jest *)",
+      "Bash(corepack pnpm *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(node start.js)",
+      "Bash(node -e \"const m=require\\('embedded-postgres'\\); console.log\\('typeof default:', typeof m.default\\); console.log\\('keys:', Object.keys\\(m\\)\\); console.log\\('typeof module:', typeof m\\);\")",
+      "Bash(export DATABASE_URL=\"postgresql://vop:vop@localhost:5433/vop?schema=public\")",
+      "Bash(DATABASE_URL=\"postgresql://vop:vop@localhost:5433/vop?schema=public\" NODE_ENV=\"development\" VOP_API_PORT=\"3000\" VOP_MASTER_KEY=\"dev-master-key\" VOP_BLIND_INDEX_KEY=\"dev-blind-index-key\" VOP_STORAGE_DRIVER=\"local\" VOP_SECRETS_DRIVER=\"env\" VOP_KEY_DRIVER=\"local\" REDIS_URL=\"redis://localhost:6379\" VOP_CORS_ORIGINS=\"http://localhost:3001\" node dist/main.js)"
+    ]
+  }
+}

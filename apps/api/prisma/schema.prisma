@@ -1,0 +1,206 @@
+// VOP data model — Phase 0 base (identity, sessions, IdP config, append-only audit).
+// Phase 1 uses registration/approval + delegation. Vendor/workflow/document models arrive
+// in Phases 2–4. IDs exposed in URLs are ULIDs (char(26)); see ADR-0003.
+// The audit_log table is append-only + hash-chained (ADR-0005); a migration revokes
+// UPDATE/DELETE from the app role and adds a guard trigger.
+
+generator client {
+  provider      = "prisma-client-js"
+  // native = local dev; debian target = the distroless runtime image.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  PENDING_APPROVAL
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum AuthMethod {
+  OIDC
+  SAML
+  LOCAL
+  VENDOR_OTP
+}
+
+enum RegistrationStatus {
+  PENDING
+  INFO_REQUESTED
+  APPROVED
+  REJECTED
+  EXPIRED
+  ESCALATED
+}
+
+enum IdpProtocol {
+  OIDC
+  SAML
+}
+
+enum AuditOutcome {
+  SUCCESS
+  FAILURE
+  DENIED
+}
+
+model Role {
+  id          String   @id @db.Char(26)
+  key         String   @unique
+  label       String
+  description String   @default("")
+  builtIn     Boolean  @default(false)
+  permissions String[] // resource:action strings
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(6)
+
+  users User[] @relation("UserRoles")
+
+  @@map("roles")
+}
+
+model User {
+  id                 String     @id @db.Char(26)
+  email              String     @unique
+  name               String
+  employeeId         String?    @map("employee_id")
+  department         String?
+  designation        String?
+  status             UserStatus @default(PENDING_APPROVAL)
+  authMethod         AuthMethod @default(OIDC) @map("auth_method")
+  externalSubject    String?    @map("external_subject") // IdP `sub`
+  managerId          String?    @map("manager_id") @db.Char(26)
+  mustChangePassword Boolean    @default(false) @map("must_change_password")
+  pwSalt             String?    @map("pw_salt")
+  pwHash             String?    @map("pw_hash")
+  lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  manager     User?  @relation("Manager", fields: [managerId], references: [id])
+  reports     User[] @relation("Manager")
+  roles       Role[] @relation("UserRoles")
+
+  sessions             Session[]
+  registrationRequests RegistrationRequest[] @relation("Requester")
+  decidedRequests      RegistrationRequest[] @relation("Decider")
+  delegationsFrom      Delegation[]          @relation("DelegateFrom")
+  delegationsTo        Delegation[]          @relation("DelegateTo")
+
+  @@index([managerId])
+  @@index([status])
+  @@map("users")
+}
+
+model Session {
+  id                String    @id @db.Char(26)
+  userId            String    @map("user_id") @db.Char(26)
+  tokenHash         String    @unique @map("token_hash")
+  ip                String?
+  userAgent         String?   @map("user_agent")
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt        DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  idleExpiresAt     DateTime  @map("idle_expires_at") @db.Timestamptz(6)
+  absoluteExpiresAt DateTime  @map("absolute_expires_at") @db.Timestamptz(6)
+  revokedAt         DateTime? @map("revoked_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model IdpConfig {
+  id            String      @id @db.Char(26)
+  name          String
+  protocol      IdpProtocol
+  issuer        String?
+  clientId      String?     @map("client_id")
+  metadataUrl   String?     @map("metadata_url")
+  claimMappings Json        @default("{}") @map("claim_mappings")
+  enabled       Boolean     @default(false)
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  claimRoleMappings ClaimRoleMapping[]
+
+  @@map("idp_config")
+}
+
+model ClaimRoleMapping {
+  id          String @id @db.Char(26)
+  idpConfigId String @map("idp_config_id") @db.Char(26)
+  claimType   String @map("claim_type") // e.g. "group", "role"
+  claimValue  String @map("claim_value")
+  roleKey     String @map("role_key")
+
+  idpConfig IdpConfig @relation(fields: [idpConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([idpConfigId, claimType, claimValue, roleKey])
+  @@map("claim_role_mapping")
+}
+
+model RegistrationRequest {
+  id             String             @id @db.Char(26)
+  userId         String             @map("user_id") @db.Char(26)
+  requestedRoles String[]           @map("requested_roles")
+  justification  String
+  status         RegistrationStatus @default(PENDING)
+  managerId      String?            @map("manager_id") @db.Char(26)
+  decidedById    String?            @map("decided_by_id") @db.Char(26)
+  decidedAt      DateTime?          @map("decided_at") @db.Timestamptz(6)
+  decisionNote   String?            @map("decision_note")
+  expiresAt      DateTime           @map("expires_at") @db.Timestamptz(6)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user      User  @relation("Requester", fields: [userId], references: [id], onDelete: Cascade)
+  decidedBy User? @relation("Decider", fields: [decidedById], references: [id])
+
+  @@index([status])
+  @@map("registration_request")
+}
+
+model Delegation {
+  id         String   @id @db.Char(26)
+  fromUserId String   @map("from_user_id") @db.Char(26)
+  toUserId   String   @map("to_user_id") @db.Char(26)
+  startsAt   DateTime @map("starts_at") @db.Timestamptz(6)
+  endsAt     DateTime @map("ends_at") @db.Timestamptz(6)
+  reason     String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  fromUser User @relation("DelegateFrom", fields: [fromUserId], references: [id], onDelete: Cascade)
+  toUser   User @relation("DelegateTo", fields: [toUserId], references: [id], onDelete: Cascade)
+
+  @@map("delegation")
+}
+
+/// Append-only, hash-chained audit trail (ADR-0005). Ordered by monotonic `seq`.
+/// The application DB role has INSERT/SELECT only; a trigger rejects UPDATE/DELETE.
+model AuditLog {
+  seq           BigInt       @id @default(autoincrement())
+  id            String       @unique @db.Char(26) // external reference
+  at            DateTime     @default(now()) @db.Timestamptz(6)
+  actorId       String?      @map("actor_id")
+  actorRole     String?      @map("actor_role")
+  ip            String?
+  userAgent     String?      @map("user_agent")
+  action        String
+  entityType    String?      @map("entity_type")
+  entityId      String?      @map("entity_id")
+  outcome       AuditOutcome @default(SUCCESS)
+  detail        Json?
+  correlationId String?      @map("correlation_id")
+  prevHash      String       @map("prev_hash")
+  rowHash       String       @unique @map("row_hash")
+
+  @@index([actorId])
+  @@index([entityType, entityId])
+  @@index([at])
+  @@map("audit_log")
+}

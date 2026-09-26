@@ -1,0 +1,92 @@
+{
+  "realm": "vop",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "accessTokenLifespan": 300,
+  "groups": [
+    { "name": "proposers" },
+    { "name": "procurement" },
+    { "name": "finance" },
+    { "name": "compliance" },
+    { "name": "platform-admins" }
+  ],
+  "clients": [
+    {
+      "clientId": "vop-api",
+      "name": "VOP API",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "secret": "changeme",
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"],
+      "defaultClientScopes": ["openid", "profile", "email", "roles"],
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "groups"
+          }
+        },
+        {
+          "name": "manager",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "manager",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "manager",
+            "jsonType.label": "String"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "vop-web",
+      "name": "VOP Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:3001/*"],
+      "webOrigins": ["http://localhost:3001"]
+    }
+  ],
+  "users": [
+    {
+      "username": "meera.iyer",
+      "email": "meera.iyer@vop.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Meera",
+      "lastName": "Iyer",
+      "attributes": { "manager": ["raj.malhotra@vop.local"] },
+      "groups": ["/proposers"],
+      "credentials": [{ "type": "password", "value": "Passw0rd!", "temporary": false }]
+    },
+    {
+      "username": "raj.malhotra",
+      "email": "raj.malhotra@vop.local",
+      "emailVerified": true,
+      "enabled": true,
+      "firstName": "Raj",
+      "lastName": "Malhotra",
+      "groups": ["/procurement"],
+      "credentials": [{ "type": "password", "value": "Passw0rd!", "temporary": false }]
+    }
+  ]
+}
