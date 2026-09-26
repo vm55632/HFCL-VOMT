@@ -119,6 +119,21 @@ export class WorkflowsService {
     return wf;
   }
 
+  /** The built engine definition for the currently published version of a key. */
+  async publishedDefinition(key: string): Promise<WorkflowDefinition> {
+    return buildDefinition(await this.getPublished(key));
+  }
+
+  /** The built engine definition for a specific version (an in-flight case keeps its version). */
+  async definitionFor(key: string, version: number): Promise<WorkflowDefinition> {
+    const wf = await this.prisma.workflowDefinition.findUnique({
+      where: { key_version: { key, version } },
+      include: stageInclude,
+    });
+    if (!wf) throw new NotFoundException(`Workflow "${key}" v${version} not found.`);
+    return buildDefinition(wf);
+  }
+
   /** Create a new DRAFT — a brand-new key (v1) or the next version of an existing key. */
   async createDraft(input: WorkflowInput, actorId: string) {
     this.assertStages(input);
