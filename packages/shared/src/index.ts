@@ -7,3 +7,4 @@ export * from './masking';
 export * from './redaction';
 export * from './workflow';
 export * from './master-data';
+export * from './risk';
