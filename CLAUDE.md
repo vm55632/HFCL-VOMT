@@ -80,9 +80,16 @@ Copy `.env.example` to `.env` before running. Never commit `.env`.
 
 ## Phase status
 
-- **Phase 0 (Foundation):** in progress — scaffold, providers, config, Prisma base schema, audit skeleton, health, docker-compose, CI, ADRs.
-- **Phase 1 (Identity & Access):** next — SSO, JIT, self-registration + manager approval, RBAC guard, sessions, user admin.
-- Phases 2–6: not started (workflow engine, onboarding, validations, audit/reporting/lifecycle, hardening/deploy).
+- **Phase 0 (Foundation):** ✅ done — committed on `master` (scaffold, providers, config, Prisma base schema, audit, health, docker-compose, CI, ADRs).
+- **Phase 1 (Identity & Access):** ✅ done on branch `feat/phase-1-identity-access` — local + OIDC/SAML auth with JIT provisioning, self-registration + manager approval (SoD + expiry/escalation), deny-by-default RBAC guard (SessionGuard → PermissionsGuard) with IDOR + negative tests, DB-backed sessions (idle/absolute/revocation), brute-force (throttler + lockout), user-admin endpoints + web console. 60 unit tests pass.
+- **Phase 2 (Master data & workflow engine):** next — vendor categories, entity types, document requirements, versioned workflow engine with stage-level permissions, SLA/escalation jobs, workflow designer UI.
+- Phases 3–6: not started (onboarding, validations/risk, audit/reporting/lifecycle, hardening/deploy).
+
+## Phase 1 notes
+
+- **Verification on Windows/OneDrive:** OneDrive syncs `node_modules` and corrupts it (conflict-copy files, missing `@jest/core/build/cli`), so `jest` fails in-place though `tsc` works. Run tests from a copy outside OneDrive (e.g. `%TEMP%\vop-verify`) — or, better, move the repo out of OneDrive. This is an environment issue, not a code issue.
+- Local break-glass login is gated by `VOP_LOCAL_LOGIN_ENABLED`; seed a password via `VOP_SEED_ADMIN_PASSWORD` (never hardcoded). SSO is the norm.
+- SCIM 2.0 provisioning and access-recertification campaigns are designed but implemented later.
 
 ## Known local caveats
 
