@@ -7,7 +7,7 @@
  * Run: pnpm --filter @vop/api prisma:seed   (build @vop/shared first so it resolves).
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { ROLES, RoleKey, newId } from '@vop/shared';
+import { ROLES, RoleKey, newId, DEFAULT_CATEGORIES, DEFAULT_WORKFLOW } from '@vop/shared';
 import { PasswordService } from '../src/auth/password.service';
 
 const prisma = new PrismaClient();
@@ -139,12 +139,86 @@ async function seedBreakGlass(): Promise<void> {
   );
 }
 
+/** Seed vendor categories and the default published workflow (Phase 2 master data). */
+async function seedMasterData(): Promise<void> {
+  for (const c of DEFAULT_CATEGORIES) {
+    await prisma.vendorCategory.upsert({
+      where: { key: c.key },
+      create: {
+        id: newId(),
+        key: c.key,
+        name: c.name,
+        description: c.description,
+        sortOrder: c.sortOrder,
+        enhancedDueDiligence: c.enhancedDueDiligence,
+        requiredDocuments: c.requiredDocuments,
+        requiredValidations: c.requiredValidations,
+        workflowKey: c.workflowKey,
+      },
+      update: { name: c.name, description: c.description, sortOrder: c.sortOrder },
+    });
+  }
+  console.warn(`  categories: ${DEFAULT_CATEGORIES.length} upserted`);
+
+  const wf = DEFAULT_WORKFLOW;
+  const existing = await prisma.workflowDefinition.findUnique({
+    where: { key_version: { key: wf.key, version: wf.version } },
+  });
+  if (!existing) {
+    await prisma.workflowDefinition.create({
+      data: {
+        id: newId(),
+        key: wf.key,
+        name: wf.name,
+        version: wf.version,
+        status: 'PUBLISHED',
+        rejectStageKey: wf.rejectStageKey,
+        publishedAt: new Date(),
+        stages: {
+          create: wf.stages.map((s) => ({
+            id: newId(),
+            key: s.key,
+            name: s.name,
+            shortName: s.shortName,
+            order: s.order,
+            ownerRole: s.ownerRole,
+            slaBusinessDays: s.slaBusinessDays,
+            terminal: s.terminal,
+            applicableTiers: s.applicableTiers ?? [],
+            evidenceGate: s.evidenceGate ?? false,
+            permissions: s.ownerRole
+              ? {
+                  create: [
+                    {
+                      id: newId(),
+                      roleKey: s.ownerRole,
+                      canView: true,
+                      canEditFields: s.key === 'procurement',
+                      canApprove: true,
+                      canReject: true,
+                      canSendBack: true,
+                      canReassign: true,
+                    },
+                  ],
+                }
+              : undefined,
+          })),
+        },
+      },
+    });
+    console.warn(`  workflow: "${wf.key}" v${wf.version} published (${wf.stages.length} stages)`);
+  } else {
+    console.warn(`  workflow: "${wf.key}" v${wf.version} already present`);
+  }
+}
+
 async function main(): Promise<void> {
   console.warn('Seeding VOP identity foundation…');
   await seedRoles();
   await seedUsers();
   await seedIdp();
   await seedBreakGlass();
+  await seedMasterData();
   console.warn('Done. Demo users (SSO, no password unless break-glass set):');
   for (const u of DEMO_USERS) console.warn(`    ${u.email.padEnd(28)} ${ROLES[u.role].label}`);
 }

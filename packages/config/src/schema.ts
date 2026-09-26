@@ -55,6 +55,10 @@ export const envSchema = z
     // redis
     REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
 
+    // background jobs (SLA sweeps, escalation). Disable when no Redis is available (dev).
+    VOP_JOBS_ENABLED: boolish(true),
+    VOP_SLA_SWEEP_CRON: z.string().default('*/15 * * * *'),
+
     // provider selection
     VOP_STORAGE_DRIVER: StorageDriver,
     VOP_SECRETS_DRIVER: SecretsDriver,

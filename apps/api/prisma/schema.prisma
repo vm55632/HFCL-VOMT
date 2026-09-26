@@ -43,6 +43,12 @@ enum IdpProtocol {
   SAML
 }
 
+enum WorkflowStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
 enum AuditOutcome {
   SUCCESS
   FAILURE
@@ -205,4 +211,84 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([at])
   @@map("audit_log")
+}
+
+/// Configurable vendor category (master data). Drives required docs/validations and workflow.
+model VendorCategory {
+  id                   String   @id @db.Char(26)
+  key                  String   @unique
+  name                 String
+  description          String   @default("")
+  sortOrder            Int      @default(100) @map("sort_order")
+  active               Boolean  @default(true)
+  enhancedDueDiligence Boolean  @default(false) @map("enhanced_due_diligence")
+  requiredDocuments    String[] @map("required_documents")
+  requiredValidations  String[] @map("required_validations")
+  workflowKey          String   @map("workflow_key")
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([active, sortOrder])
+  @@map("vendor_category")
+}
+
+/// A versioned workflow definition. In-flight cases keep executing the version they started on;
+/// publishing creates a new version rather than mutating a published one.
+model WorkflowDefinition {
+  id             String         @id @db.Char(26)
+  key            String
+  name           String
+  version        Int
+  status         WorkflowStatus @default(DRAFT)
+  rejectStageKey String         @default("rejected") @map("reject_stage_key")
+  createdById    String?        @map("created_by_id") @db.Char(26)
+  publishedAt    DateTime?      @map("published_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  stages WorkflowStage[]
+
+  @@unique([key, version])
+  @@index([key, status])
+  @@map("workflow_definition")
+}
+
+model WorkflowStage {
+  id              String   @id @db.Char(26)
+  workflowId      String   @map("workflow_id") @db.Char(26)
+  key             String
+  name            String
+  shortName       String   @map("short_name")
+  order           Int
+  ownerRole       String?  @map("owner_role")
+  slaBusinessDays Int      @default(0) @map("sla_business_days")
+  terminal        Boolean  @default(false)
+  applicableTiers String[] @map("applicable_tiers")
+  evidenceGate    Boolean  @default(false) @map("evidence_gate")
+
+  workflow    WorkflowDefinition       @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  permissions WorkflowStagePermission[]
+
+  @@unique([workflowId, key])
+  @@index([workflowId, order])
+  @@map("workflow_stage")
+}
+
+/// Stage-level permissions — which role may view, edit fields, approve, reject, send back or
+/// reassign at a stage. Data-driven (prompt §3.1); enforced server-side.
+model WorkflowStagePermission {
+  id           String  @id @db.Char(26)
+  stageId      String  @map("stage_id") @db.Char(26)
+  roleKey      String  @map("role_key")
+  canView      Boolean @default(true) @map("can_view")
+  canEditFields Boolean @default(false) @map("can_edit_fields")
+  canApprove   Boolean @default(false) @map("can_approve")
+  canReject    Boolean @default(false) @map("can_reject")
+  canSendBack  Boolean @default(false) @map("can_send_back")
+  canReassign  Boolean @default(false) @map("can_reassign")
+
+  stage WorkflowStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+
+  @@unique([stageId, roleKey])
+  @@map("workflow_stage_permission")
 }
