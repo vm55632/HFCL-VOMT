@@ -14,6 +14,7 @@ export interface AppConfig {
   data: { region: string; auditRetentionDays: number };
   database: { url: string };
   redis: { url: string };
+  jobs: { enabled: boolean; slaSweepCron: string };
   drivers: {
     storage: Env['VOP_STORAGE_DRIVER'];
     secrets: Env['VOP_SECRETS_DRIVER'];
@@ -72,6 +73,7 @@ function shape(env: Env): AppConfig {
     data: { region: env.VOP_DATA_REGION, auditRetentionDays: env.VOP_AUDIT_RETENTION_DAYS },
     database: { url: env.DATABASE_URL },
     redis: { url: env.REDIS_URL },
+    jobs: { enabled: env.VOP_JOBS_ENABLED, slaSweepCron: env.VOP_SLA_SWEEP_CRON },
     drivers: {
       storage: env.VOP_STORAGE_DRIVER,
       secrets: env.VOP_SECRETS_DRIVER,

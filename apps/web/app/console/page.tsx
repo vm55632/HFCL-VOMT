@@ -120,6 +120,21 @@ export default function Console() {
         </details>
       </section>
 
+      {(me.permissions.includes('settings:manage') ||
+        me.permissions.includes('workflow:manage')) && (
+        <section className="card">
+          <h2>Administration</h2>
+          <div className="adminlinks">
+            <a className="btn btn--sm btn--ghost" href="/admin/categories">
+              Vendor categories
+            </a>
+            <a className="btn btn--sm btn--ghost" href="/admin/workflows">
+              Workflows
+            </a>
+          </div>
+        </section>
+      )}
+
       <section className="card">
         <h2>Approval inbox ({pending.length})</h2>
         {pending.length === 0 && <p className="muted">No requests awaiting your approval.</p>}
