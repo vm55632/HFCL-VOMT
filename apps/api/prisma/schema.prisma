@@ -78,6 +78,8 @@ model User {
   mustChangePassword Boolean    @default(false) @map("must_change_password")
   pwSalt             String?    @map("pw_salt")
   pwHash             String?    @map("pw_hash")
+  failedLoginCount   Int        @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?  @map("locked_until") @db.Timestamptz(6)
   lastLoginAt        DateTime?  @map("last_login_at") @db.Timestamptz(6)
   createdAt          DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)

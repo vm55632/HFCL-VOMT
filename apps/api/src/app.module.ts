@@ -1,5 +1,6 @@
 import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
-import { APP_FILTER } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule } from './config/config.module';
 import { LoggerModule } from './common/logging/logger.module';
 import { CorrelationMiddleware } from './common/correlation.middleware';
@@ -9,10 +10,15 @@ import { ProvidersModule } from './providers/providers.module';
 import { CryptoModule } from './crypto/crypto.module';
 import { AuditModule } from './audit/audit.module';
 import { HealthModule } from './health/health.module';
+import { AuthModule } from './auth/auth.module';
+import { RegistrationModule } from './registration/registration.module';
+import { UsersModule } from './users/users.module';
+import { SessionGuard } from './auth/session.guard';
+import { PermissionsGuard } from './authz/permissions.guard';
 
 /**
- * Composition root. Global modules (config, logging, prisma, providers, crypto, audit) are wired
- * once; feature modules (health now; identity/workflow/etc. in later phases) are added here.
+ * Composition root. Global modules first; feature modules next. Three global guards run in order:
+ * rate-limiting → authentication (session) → authorization (permissions) — deny-by-default.
  */
 @Module({
   imports: [
@@ -22,9 +28,19 @@ import { HealthModule } from './health/health.module';
     ProvidersModule,
     CryptoModule,
     AuditModule,
+    ThrottlerModule.forRoot([{ ttl: 60_000, limit: 100 }]),
     HealthModule,
+    AuthModule,
+    RegistrationModule,
+    UsersModule,
   ],
-  providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
+  providers: [
+    { provide: APP_FILTER, useClass: AllExceptionsFilter },
+    // Order matters: throttle, then authenticate, then authorize.
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: SessionGuard },
+    { provide: APP_GUARD, useClass: PermissionsGuard },
+  ],
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer): void {

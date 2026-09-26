@@ -8,6 +8,7 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import { ROLES, RoleKey, newId } from '@vop/shared';
+import { PasswordService } from '../src/auth/password.service';
 
 const prisma = new PrismaClient();
 
@@ -117,12 +118,34 @@ async function seedIdp(): Promise<void> {
   }
 }
 
+/**
+ * Optionally set a break-glass local password for the Super Admin, from
+ * VOP_SEED_ADMIN_PASSWORD. Never hardcoded. Local login is still gated by
+ * VOP_LOCAL_LOGIN_ENABLED at runtime; the account must change it on first use.
+ */
+async function seedBreakGlass(): Promise<void> {
+  const password = process.env.VOP_SEED_ADMIN_PASSWORD;
+  if (!password) {
+    console.warn('  break-glass: VOP_SEED_ADMIN_PASSWORD not set — no local password seeded');
+    return;
+  }
+  const { salt, hash } = await new PasswordService().hash(password);
+  await prisma.user.update({
+    where: { email: 'priya.nair@vop.local' },
+    data: { pwSalt: salt, pwHash: hash, mustChangePassword: true },
+  });
+  console.warn(
+    '  break-glass: local password set for priya.nair@vop.local (must change on first use)',
+  );
+}
+
 async function main(): Promise<void> {
   console.warn('Seeding VOP identity foundation…');
   await seedRoles();
   await seedUsers();
   await seedIdp();
-  console.warn('Done. Demo users (SSO, no password):');
+  await seedBreakGlass();
+  console.warn('Done. Demo users (SSO, no password unless break-glass set):');
   for (const u of DEMO_USERS) console.warn(`    ${u.email.padEnd(28)} ${ROLES[u.role].label}`);
 }
 

@@ -1,11 +1,13 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '../prisma/prisma.service';
+import { Public } from '../authz/public.decorator';
 
 /**
  * Liveness and readiness probes (12-factor / K8s). `live` says the process is up; `ready` says it
- * can serve — i.e. its critical dependencies (the database) are reachable.
+ * can serve — i.e. its critical dependencies (the database) are reachable. Public (no auth).
  */
+@Public()
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
