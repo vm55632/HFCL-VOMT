@@ -81,8 +81,8 @@ Copy `.env.example` to `.env` before running. Never commit `.env`.
 ## Phase status
 
 - **Phase 0 (Foundation):** ✅ done — committed on `master` (scaffold, providers, config, Prisma base schema, audit, health, docker-compose, CI, ADRs).
-- **Phase 1 (Identity & Access):** ✅ done on branch `feat/phase-1-identity-access` — local + OIDC/SAML auth with JIT provisioning, self-registration + manager approval (SoD + expiry/escalation), deny-by-default RBAC guard (SessionGuard → PermissionsGuard) with IDOR + negative tests, DB-backed sessions (idle/absolute/revocation), brute-force (throttler + lockout), user-admin endpoints + web console. 60 unit tests pass.
-- **Phase 2 (Master data & workflow engine):** next — vendor categories, entity types, document requirements, versioned workflow engine with stage-level permissions, SLA/escalation jobs, workflow designer UI.
+- **Phase 1 (Identity & Access):** ✅ done, merged to `master` — local + OIDC/SAML auth with JIT provisioning, self-registration + manager approval (SoD + expiry/escalation), deny-by-default RBAC guard with IDOR + negative tests, DB-backed sessions, brute-force protection, user-admin + web console.
+- **Phase 2 (Master data & workflow engine):** 🚧 in progress on `feat/phase-2-workflow`. Done: the data-driven, versioned **workflow engine** (`packages/shared/workflow.ts` — routing by risk tier, SLA business-day math, transition validation, evidence gate; 19 tests); vendor **categories** master data + admin API; **versioned workflow** admin API (draft → publish → archive, immutable published versions, stage-level permissions) with a live route-preview; seed for 10 categories + the published `standard-vendor` v1 workflow. **Remaining:** admin designer/categories UI, SLA/escalation background jobs, entity-type field config. Repo now lives at `C:\dev\vop` (moved off OneDrive). 81 unit tests pass.
 - Phases 3–6: not started (onboarding, validations/risk, audit/reporting/lifecycle, hardening/deploy).
 
 ## Phase 1 notes

@@ -13,6 +13,8 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { RegistrationModule } from './registration/registration.module';
 import { UsersModule } from './users/users.module';
+import { MasterDataModule } from './master-data/master-data.module';
+import { WorkflowModule } from './workflow/workflow.module';
 import { SessionGuard } from './auth/session.guard';
 import { PermissionsGuard } from './authz/permissions.guard';
 
@@ -33,6 +35,8 @@ import { PermissionsGuard } from './authz/permissions.guard';
     AuthModule,
     RegistrationModule,
     UsersModule,
+    MasterDataModule,
+    WorkflowModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
