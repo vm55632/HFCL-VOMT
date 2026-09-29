@@ -9,3 +9,5 @@ export * from './workflow';
 export * from './master-data';
 export * from './risk';
 export * from './filetype';
+export * from './name-match';
+export * from './red-flags';
