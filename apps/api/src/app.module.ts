@@ -17,6 +17,7 @@ import { MasterDataModule } from './master-data/master-data.module';
 import { WorkflowModule } from './workflow/workflow.module';
 import { JobsModule } from './jobs/jobs.module';
 import { CasesModule } from './cases/cases.module';
+import { DocumentsModule } from './documents/documents.module';
 import { SessionGuard } from './auth/session.guard';
 import { PermissionsGuard } from './authz/permissions.guard';
 
@@ -41,6 +42,7 @@ import { PermissionsGuard } from './authz/permissions.guard';
     WorkflowModule,
     JobsModule,
     CasesModule,
+    DocumentsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

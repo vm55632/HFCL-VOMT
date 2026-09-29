@@ -8,3 +8,4 @@ export * from './redaction';
 export * from './workflow';
 export * from './master-data';
 export * from './risk';
+export * from './filetype';

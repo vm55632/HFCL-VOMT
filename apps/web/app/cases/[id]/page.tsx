@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { apiFetch, ApiError } from '../../../lib/api';
+import { apiFetch, ApiError, API_BASE } from '../../../lib/api';
 
 interface ChecklistItem {
   id: string;
@@ -23,6 +23,17 @@ interface Activity {
   fromStage: string | null;
   toStage: string | null;
   note: string | null;
+}
+interface Doc {
+  id: string;
+  docType: string;
+  filename: string;
+  fileType: string;
+  sizeBytes: number;
+  sha256: string;
+  status: string;
+  version: number;
+  createdAt: string;
 }
 interface CaseDetail {
   id: string;
@@ -53,16 +64,38 @@ const NEEDS_NOTE = new Set(['return', 'reject', 'hold', 'reopen']);
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const [c, setC] = useState<CaseDetail | null>(null);
+  const [docs, setDocs] = useState<Doc[]>([]);
+  const [docType, setDocType] = useState('pan_card');
   const [comment, setComment] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
       setC(await apiFetch<CaseDetail>(`/cases/${id}`));
+      setDocs(await apiFetch<Doc[]>(`/cases/${id}/documents`));
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : 'Failed to load.');
     }
   }, [id]);
+
+  async function uploadDoc(file: File) {
+    setMsg(null);
+    const form = new FormData();
+    form.append('file', file);
+    form.append('docType', docType);
+    const res = await fetch(`${API_BASE}/cases/${id}/documents`, {
+      method: 'POST',
+      credentials: 'include',
+      body: form,
+    });
+    if (!res.ok) {
+      const b = (await res.json().catch(() => ({}))) as { error?: string };
+      setMsg(b.error ?? `Upload failed (${res.status})`);
+    } else {
+      setMsg('Document uploaded (scanned clean).');
+    }
+    await load();
+  }
   useEffect(() => {
     void load();
   }, [load]);
@@ -202,6 +235,81 @@ export default function CaseDetail() {
             {it.role && <span className="muted tiny">{it.role}</span>}
           </label>
         ))}
+      </section>
+
+      <section className="card">
+        <h2>Documents ({docs.length})</h2>
+        <div className="req__actions">
+          <select value={docType} onChange={(e) => setDocType(e.target.value)}>
+            {[
+              'pan_card',
+              'gst_certificate',
+              'cancelled_cheque',
+              'insurance',
+              'tax_residency_certificate',
+              'related_party_declaration',
+              'other',
+            ].map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <input
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void uploadDoc(f);
+              e.currentTarget.value = '';
+            }}
+          />
+        </div>
+        <p className="muted tiny">PDF/JPG/PNG only — validated by content and malware-scanned.</p>
+        <table className="tbl">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>File</th>
+              <th>Size</th>
+              <th>SHA-256</th>
+              <th>Status</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {docs.map((d) => (
+              <tr key={d.id}>
+                <td>
+                  {d.docType} <span className="muted tiny">v{d.version}</span>
+                </td>
+                <td>{d.filename}</td>
+                <td className="muted">{(d.sizeBytes / 1024).toFixed(0)} KB</td>
+                <td className="muted tiny">{d.sha256.slice(0, 12)}…</td>
+                <td>
+                  <span className={d.status === 'CLEAN' ? 'pill pill--ok' : 'pill'}>
+                    {d.status}
+                  </span>
+                </td>
+                <td>
+                  <a
+                    className="btn btn--sm btn--ghost"
+                    href={`${API_BASE}/cases/${id}/documents/${d.id}/download`}
+                  >
+                    Download
+                  </a>
+                </td>
+              </tr>
+            ))}
+            {docs.length === 0 && (
+              <tr>
+                <td colSpan={6} className="muted">
+                  No documents.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </section>
 
       <section className="card">

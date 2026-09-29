@@ -92,9 +92,10 @@ export const envSchema = z
     VOP_SMTP_PASSWORD: z.string().optional(),
     VOP_EMAIL_FROM: z.string().default('no-reply@vop.local'),
 
-    // scanning
+    // scanning & uploads
     VOP_CLAMAV_HOST: z.string().default('localhost'),
     VOP_CLAMAV_PORT: numish(3310),
+    VOP_MAX_UPLOAD_MB: numish(10),
 
     // sessions
     VOP_SESSION_COOKIE_NAME: z.string().default('vop_sid'),

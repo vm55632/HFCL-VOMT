@@ -49,6 +49,12 @@ enum WorkflowStatus {
   ARCHIVED
 }
 
+enum DocumentStatus {
+  CLEAN
+  INFECTED
+  QUARANTINED
+}
+
 enum AuditOutcome {
   SUCCESS
   FAILURE
@@ -365,6 +371,7 @@ model Case {
   checklist CaseChecklistItem[]
   comments  CaseComment[]
   activity  CaseActivity[]
+  documents Document[]
 
   @@index([stage])
   @@index([createdById])
@@ -418,4 +425,31 @@ model CaseActivity {
 
   @@index([caseId, at])
   @@map("case_activity")
+}
+
+/// An uploaded document on a case. The file is stored via the StorageProvider under an opaque
+/// key (never the user filename); only metadata lives here. Every upload is magic-byte validated
+/// and malware-scanned; infected files are never stored. SHA-256 gives integrity.
+model Document {
+  id            String         @id @db.Char(26)
+  caseId        String         @map("case_id") @db.Char(26)
+  docType       String         @map("doc_type")
+  filename      String // original name, for display only
+  storageKey    String         @unique @map("storage_key")
+  contentType   String         @map("content_type")
+  fileType      String         @map("file_type")
+  sizeBytes     Int            @map("size_bytes")
+  sha256        String
+  status        DocumentStatus @default(QUARANTINED)
+  scanSignature String?        @map("scan_signature")
+  version       Int            @default(1)
+  expiryDate    DateTime?      @map("expiry_date") @db.Date
+  uploadedById  String         @map("uploaded_by_id") @db.Char(26)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([expiryDate])
+  @@map("document")
 }
