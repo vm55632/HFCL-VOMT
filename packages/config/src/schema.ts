@@ -25,7 +25,7 @@ const SecretsDriver = z.enum(['env', 'vault', 'azure-kv', 'aws-sm', 'gcp-sm']).d
 const EmailDriver = z.enum(['smtp', 'sendgrid', 'azure-acs', 'aws-ses']).default('smtp');
 const SmsDriver = z.enum(['mock', 'msg91', 'twilio', 'sns']).default('mock');
 const QueueDriver = z.enum(['redis', 'azure-servicebus', 'aws-sqs', 'gcp-pubsub']).default('redis');
-const ScanDriver = z.enum(['clamav', 'cloud']).default('clamav');
+const ScanDriver = z.enum(['clamav', 'mock', 'cloud']).default('clamav');
 const KeyDriver = z
   .enum(['local', 'vault-transit', 'azure-kv', 'aws-kms', 'gcp-kms'])
   .default('local');

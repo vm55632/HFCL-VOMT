@@ -64,7 +64,9 @@ export class ClamAvScanProvider implements ScanProvider {
  */
 export class MockScanProvider implements ScanProvider {
   scan(data: Buffer): Promise<ScanResult> {
-    const infected = data.toString('latin1').includes(EICAR);
+    const text = data.toString('latin1');
+    // Match the canonical EICAR body (unambiguous — avoids the leading escape chars).
+    const infected = text.includes(EICAR) || text.includes('EICAR-STANDARD-ANTIVIRUS-TEST-FILE');
     return Promise.resolve(
       infected ? { clean: false, signature: 'Eicar-Test-Signature' } : { clean: true },
     );
