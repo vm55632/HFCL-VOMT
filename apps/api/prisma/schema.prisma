@@ -368,10 +368,11 @@ model Case {
   taxpayerType      String? @map("taxpayer_type")
   legalNameOnRecord String? @map("legal_name_on_record")
 
-  checklist CaseChecklistItem[]
-  comments  CaseComment[]
-  activity  CaseActivity[]
-  documents Document[]
+  checklist    CaseChecklistItem[]
+  comments     CaseComment[]
+  activity     CaseActivity[]
+  documents    Document[]
+  verification CaseVerification?
 
   @@index([stage])
   @@index([createdById])
@@ -452,4 +453,34 @@ model Document {
   @@index([caseId])
   @@index([expiryDate])
   @@map("document")
+}
+
+/// Statutory verification results for a case (1:1): what the PAN/GST/bank/MCA/Udyam providers
+/// returned, the name-match score, offline cross-checks, and the red flags raised. reviewRequired
+/// routes the case into the manual review queue. Raw provider payloads are referenced, not stored
+/// in the clear (rawRef). Recomputed on each run.
+model CaseVerification {
+  id                String   @id @db.Char(26)
+  caseId            String   @unique @map("case_id") @db.Char(26)
+  panStatus         String?  @map("pan_status")
+  gstStatus         String?  @map("gst_status")
+  bankStatus        String?  @map("bank_status")
+  mcaStatus         String?  @map("mca_status")
+  udyamStatus       String?  @map("udyam_status")
+  gstLegalName      String?  @map("gst_legal_name")
+  bankNameOnRecord  String?  @map("bank_name_on_record")
+  taxpayerType      String?  @map("taxpayer_type")
+  incorporationDate String?  @map("incorporation_date")
+  nameMatchScore    Float?   @map("name_match_score")
+  nameMatchVerdict  String?  @map("name_match_verdict")
+  crossChecks       Json     @default("[]") @map("cross_checks")
+  redFlags          Json     @default("[]") @map("red_flags")
+  reviewRequired    Boolean  @default(false) @map("review_required")
+  rawRef            String?  @map("raw_ref")
+  verifiedAt        DateTime @default(now()) @map("verified_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([reviewRequired])
+  @@map("case_verification")
 }

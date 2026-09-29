@@ -18,6 +18,7 @@ import { WorkflowModule } from './workflow/workflow.module';
 import { JobsModule } from './jobs/jobs.module';
 import { CasesModule } from './cases/cases.module';
 import { DocumentsModule } from './documents/documents.module';
+import { VerificationModule } from './verification/verification.module';
 import { SessionGuard } from './auth/session.guard';
 import { PermissionsGuard } from './authz/permissions.guard';
 
@@ -43,6 +44,7 @@ import { PermissionsGuard } from './authz/permissions.guard';
     JobsModule,
     CasesModule,
     DocumentsModule,
+    VerificationModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
