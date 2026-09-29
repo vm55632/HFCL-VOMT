@@ -58,6 +58,29 @@ interface CaseDetail {
   comments: Comment[];
   activity: Activity[];
 }
+interface CrossCheck {
+  key: string;
+  label: string;
+  ok: boolean;
+  detail?: string;
+}
+interface RedFlag {
+  key: string;
+  severity: string;
+  message: string;
+}
+interface Verification {
+  panStatus: string | null;
+  gstStatus: string | null;
+  bankStatus: string | null;
+  gstLegalName: string | null;
+  nameMatchScore: number | null;
+  nameMatchVerdict: string | null;
+  crossChecks: CrossCheck[];
+  redFlags: RedFlag[];
+  reviewRequired: boolean;
+  verifiedAt: string;
+}
 
 const NEEDS_NOTE = new Set(['return', 'reject', 'hold', 'reopen']);
 
@@ -65,6 +88,7 @@ export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
   const [c, setC] = useState<CaseDetail | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
+  const [ver, setVer] = useState<Verification | null>(null);
   const [docType, setDocType] = useState('pan_card');
   const [comment, setComment] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
@@ -73,10 +97,22 @@ export default function CaseDetail() {
     try {
       setC(await apiFetch<CaseDetail>(`/cases/${id}`));
       setDocs(await apiFetch<Doc[]>(`/cases/${id}/documents`));
+      setVer(await apiFetch<Verification | null>(`/cases/${id}/verification`));
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : 'Failed to load.');
     }
   }, [id]);
+
+  async function runVerify() {
+    setMsg(null);
+    try {
+      await apiFetch(`/cases/${id}/verify`, { method: 'POST' });
+      setMsg('Verification run.');
+      await load();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Verification failed.');
+    }
+  }
 
   async function uploadDoc(file: File) {
     setMsg(null);
@@ -214,6 +250,62 @@ export default function CaseDetail() {
           Category: {c.categoryKey} · risk score {c.riskScore}
         </p>
         <p>{c.justification}</p>
+      </section>
+
+      <section className="card">
+        <h2>Statutory verification</h2>
+        <div className="req__actions">
+          <button className="btn btn--sm" onClick={() => void runVerify()}>
+            Run verification
+          </button>
+          {ver?.reviewRequired && <span className="pill tier--high">manual review</span>}
+        </div>
+        {!ver && <p className="muted">Not yet verified.</p>}
+        {ver && (
+          <>
+            <div className="grid2">
+              <div>
+                PAN: <span className="pill">{ver.panStatus ?? '—'}</span>
+              </div>
+              <div>
+                GST: <span className="pill">{ver.gstStatus ?? '—'}</span>
+              </div>
+              <div>
+                Bank: <span className="pill">{ver.bankStatus ?? '—'}</span>
+              </div>
+              <div>
+                Name match: <span className="pill">{ver.nameMatchVerdict ?? '—'}</span>
+                {ver.nameMatchScore != null && ` (${ver.nameMatchScore.toFixed(2)})`}
+              </div>
+            </div>
+            <h3>Cross-checks</h3>
+            <ul className="timeline">
+              {ver.crossChecks.map((x) => (
+                <li key={x.key}>
+                  {x.ok ? '✓' : '✗'} {x.label}
+                  {x.detail ? ` — ${x.detail}` : ''}
+                </li>
+              ))}
+            </ul>
+            {ver.redFlags.length > 0 && (
+              <>
+                <h3>Red flags ({ver.redFlags.length})</h3>
+                <ul className="timeline">
+                  {ver.redFlags.map((f) => (
+                    <li key={f.key}>
+                      <span
+                        className={`pill tier--${f.severity === 'high' ? 'critical' : 'medium'}`}
+                      >
+                        {f.severity}
+                      </span>{' '}
+                      {f.message}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </>
+        )}
       </section>
 
       <section className="card">

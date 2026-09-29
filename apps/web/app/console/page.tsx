@@ -126,6 +126,11 @@ export default function Console() {
           <a className="btn btn--sm btn--ghost" href="/cases">
             Cases
           </a>
+          {me.permissions.includes('vendor:read_all') && (
+            <a className="btn btn--sm btn--ghost" href="/review-queue">
+              Review queue
+            </a>
+          )}
           {me.permissions.includes('vendor:create') && (
             <a className="btn btn--sm" href="/cases/new">
               + Raise a case
