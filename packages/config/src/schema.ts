@@ -25,7 +25,7 @@ const SecretsDriver = z.enum(['env', 'vault', 'azure-kv', 'aws-sm', 'gcp-sm']).d
 const EmailDriver = z.enum(['smtp', 'sendgrid', 'azure-acs', 'aws-ses']).default('smtp');
 const SmsDriver = z.enum(['mock', 'msg91', 'twilio', 'sns']).default('mock');
 const QueueDriver = z.enum(['redis', 'azure-servicebus', 'aws-sqs', 'gcp-pubsub']).default('redis');
-const ScanDriver = z.enum(['clamav', 'cloud']).default('clamav');
+const ScanDriver = z.enum(['clamav', 'mock', 'cloud']).default('clamav');
 const KeyDriver = z
   .enum(['local', 'vault-transit', 'azure-kv', 'aws-kms', 'gcp-kms'])
   .default('local');
@@ -92,9 +92,10 @@ export const envSchema = z
     VOP_SMTP_PASSWORD: z.string().optional(),
     VOP_EMAIL_FROM: z.string().default('no-reply@vop.local'),
 
-    // scanning
+    // scanning & uploads
     VOP_CLAMAV_HOST: z.string().default('localhost'),
     VOP_CLAMAV_PORT: numish(3310),
+    VOP_MAX_UPLOAD_MB: numish(10),
 
     // sessions
     VOP_SESSION_COOKIE_NAME: z.string().default('vop_sid'),

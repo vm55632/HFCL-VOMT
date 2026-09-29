@@ -46,3 +46,7 @@ Thumbs.db
 data/
 uploads/
 .quarantine/
+
+# local object storage (dev)
+.storage/
+**/.storage/

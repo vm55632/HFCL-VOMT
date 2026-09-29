@@ -20,7 +20,7 @@ import {
 import { SmtpEmailProvider, NotImplementedEmail } from './email.adapters';
 import { MockSmsProvider, NotImplementedSms } from './sms.adapters';
 import { RedisQueueProvider, NotImplementedQueue } from './queue.adapters';
-import { ClamAvScanProvider, NotImplementedScan } from './scan.adapters';
+import { ClamAvScanProvider, MockScanProvider, NotImplementedScan } from './scan.adapters';
 import { LocalKeyProvider, NotImplementedKeyProvider } from './key.adapters';
 import { MockVerificationProvider, NotImplementedVerification } from './verification.adapters';
 
@@ -106,8 +106,16 @@ const providers: Provider[] = [
   {
     provide: SCAN_PROVIDER,
     inject: [APP_CONFIG],
-    useFactory: (c: AppConfig) =>
-      c.drivers.scan === 'clamav' ? new ClamAvScanProvider(c) : new NotImplementedScan('Cloud'),
+    useFactory: (c: AppConfig) => {
+      switch (c.drivers.scan) {
+        case 'clamav':
+          return new ClamAvScanProvider(c);
+        case 'mock':
+          return new MockScanProvider();
+        default:
+          return new NotImplementedScan('Cloud');
+      }
+    },
   },
   {
     provide: KEY_PROVIDER,

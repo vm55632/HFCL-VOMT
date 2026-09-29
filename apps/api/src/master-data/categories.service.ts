@@ -29,6 +29,12 @@ export class CategoriesService {
     });
   }
 
+  async get(key: string) {
+    const cat = await this.prisma.vendorCategory.findUnique({ where: { key } });
+    if (!cat) throw new NotFoundException(`Category "${key}" not found.`);
+    return cat;
+  }
+
   async create(input: CategoryInput, actorId: string) {
     const exists = await this.prisma.vendorCategory.findUnique({ where: { key: input.key } });
     if (exists) throw new BadRequestException(`Category "${input.key}" already exists.`);

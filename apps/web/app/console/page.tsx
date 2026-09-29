@@ -120,6 +120,20 @@ export default function Console() {
         </details>
       </section>
 
+      <section className="card">
+        <h2>Vendor onboarding</h2>
+        <div className="adminlinks">
+          <a className="btn btn--sm btn--ghost" href="/cases">
+            Cases
+          </a>
+          {me.permissions.includes('vendor:create') && (
+            <a className="btn btn--sm" href="/cases/new">
+              + Raise a case
+            </a>
+          )}
+        </div>
+      </section>
+
       {(me.permissions.includes('settings:manage') ||
         me.permissions.includes('workflow:manage')) && (
         <section className="card">

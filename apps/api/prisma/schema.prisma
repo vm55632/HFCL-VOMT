@@ -49,6 +49,12 @@ enum WorkflowStatus {
   ARCHIVED
 }
 
+enum DocumentStatus {
+  CLEAN
+  INFECTED
+  QUARANTINED
+}
+
 enum AuditOutcome {
   SUCCESS
   FAILURE
@@ -291,4 +297,159 @@ model WorkflowStagePermission {
 
   @@unique([stageId, roleKey])
   @@map("workflow_stage_permission")
+}
+
+/// A vendor onboarding case — the request that flows through a workflow. Sensitive identifiers
+/// (PAN, bank account) are stored encrypted (envelope) with a blind index for duplicate detection;
+/// the tier and checklist are computed server-side. In-flight cases keep their workflow version.
+model Case {
+  id              String    @id @db.Char(26)
+  ref             String    @unique
+  categoryKey     String    @map("category_key")
+  workflowKey     String    @map("workflow_key")
+  workflowVersion Int       @map("workflow_version")
+
+  // workflow state
+  stage      String
+  assigneeId String?   @map("assignee_id") @db.Char(26)
+  dueAt      DateTime? @map("due_at") @db.Timestamptz(6)
+  onHold     Boolean   @default(false) @map("on_hold")
+  tier       String    @default("low")
+  riskScore  Int       @default(0) @map("risk_score")
+  vendorCode String?   @map("vendor_code")
+
+  // ownership / timestamps
+  createdById String   @map("created_by_id") @db.Char(26)
+  submittedAt DateTime? @map("submitted_at") @db.Timestamptz(6)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // vendor identity (non-sensitive)
+  legalName    String  @map("legal_name")
+  tradeName    String? @map("trade_name")
+  contactName  String? @map("contact_name")
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  // statutory ids — PAN & bank account encrypted; GSTIN/IFSC stored plainly, blind-indexed for dedup
+  panEnc           String? @map("pan_enc")
+  panBlindIndex    String? @map("pan_blind_index")
+  gstin            String? @map("gstin")
+  gstinBlindIndex  String? @map("gstin_blind_index")
+  ifsc             String? @map("ifsc")
+  bankAccountEnc   String? @map("bank_account_enc")
+  bankBlindIndex   String? @map("bank_blind_index")
+
+  // engagement
+  businessUnit    String? @map("business_unit")
+  costCentre      String? @map("cost_centre")
+  spend           Int     @default(0)
+  contractMonths  Int?    @map("contract_months")
+  natureOfService String? @map("nature_of_service")
+  justification   String  @default("")
+  coiDeclared     Boolean @default(false) @map("coi_declared")
+  coiDetails      String? @map("coi_details")
+
+  // risk inputs
+  dataAccess     String? @map("data_access")
+  systemAccess   String? @map("system_access")
+  subcontract    String?
+  delivery       String?
+  screening      String?
+  conflict       String?
+  litigation     String?
+  insurance      String?
+  certifications String?
+
+  // registry-derived (populated by verification in Phase 4)
+  panStatus         String? @map("pan_status")
+  gstStatus         String? @map("gst_status")
+  nameMatch         String? @map("name_match")
+  taxpayerType      String? @map("taxpayer_type")
+  legalNameOnRecord String? @map("legal_name_on_record")
+
+  checklist CaseChecklistItem[]
+  comments  CaseComment[]
+  activity  CaseActivity[]
+  documents Document[]
+
+  @@index([stage])
+  @@index([createdById])
+  @@index([assigneeId])
+  @@index([panBlindIndex])
+  @@index([gstinBlindIndex])
+  @@index([bankBlindIndex])
+  @@map("case")
+}
+
+model CaseChecklistItem {
+  id       String    @id @db.Char(26)
+  caseId   String    @map("case_id") @db.Char(26)
+  itemId   String    @map("item_id")
+  label    String
+  role     String?
+  done     Boolean   @default(false)
+  doneById String?   @map("done_by_id") @db.Char(26)
+  doneAt   DateTime? @map("done_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, itemId])
+  @@map("case_checklist_item")
+}
+
+model CaseComment {
+  id       String   @id @db.Char(26)
+  caseId   String   @map("case_id") @db.Char(26)
+  authorId String   @map("author_id") @db.Char(26)
+  body     String
+  at       DateTime @default(now()) @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@map("case_comment")
+}
+
+model CaseActivity {
+  id        String   @id @db.Char(26)
+  caseId    String   @map("case_id") @db.Char(26)
+  at        DateTime @default(now()) @db.Timestamptz(6)
+  actorId   String?  @map("actor_id") @db.Char(26)
+  action    String
+  fromStage String?  @map("from_stage")
+  toStage   String?  @map("to_stage")
+  note      String?
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, at])
+  @@map("case_activity")
+}
+
+/// An uploaded document on a case. The file is stored via the StorageProvider under an opaque
+/// key (never the user filename); only metadata lives here. Every upload is magic-byte validated
+/// and malware-scanned; infected files are never stored. SHA-256 gives integrity.
+model Document {
+  id            String         @id @db.Char(26)
+  caseId        String         @map("case_id") @db.Char(26)
+  docType       String         @map("doc_type")
+  filename      String // original name, for display only
+  storageKey    String         @unique @map("storage_key")
+  contentType   String         @map("content_type")
+  fileType      String         @map("file_type")
+  sizeBytes     Int            @map("size_bytes")
+  sha256        String
+  status        DocumentStatus @default(QUARANTINED)
+  scanSignature String?        @map("scan_signature")
+  version       Int            @default(1)
+  expiryDate    DateTime?      @map("expiry_date") @db.Date
+  uploadedById  String         @map("uploaded_by_id") @db.Char(26)
+  createdAt     DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([expiryDate])
+  @@map("document")
 }

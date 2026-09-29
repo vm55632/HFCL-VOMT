@@ -43,6 +43,7 @@ export interface AppConfig {
     from: string;
   };
   scan: { host: string; port: number };
+  uploads: { maxBytes: number };
   session: {
     cookieName: string;
     idleMinutes: number;
@@ -102,6 +103,7 @@ function shape(env: Env): AppConfig {
       from: env.VOP_EMAIL_FROM,
     },
     scan: { host: env.VOP_CLAMAV_HOST, port: env.VOP_CLAMAV_PORT },
+    uploads: { maxBytes: env.VOP_MAX_UPLOAD_MB * 1024 * 1024 },
     session: {
       cookieName: env.VOP_SESSION_COOKIE_NAME,
       idleMinutes: env.VOP_SESSION_IDLE_MINUTES,
