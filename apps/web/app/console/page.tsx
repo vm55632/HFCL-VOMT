@@ -154,6 +154,20 @@ export default function Console() {
         </section>
       )}
 
+      {me.permissions.includes('audit_log:read') && (
+        <section className="card">
+          <h2>Audit &amp; reporting</h2>
+          <div className="adminlinks">
+            <a className="btn btn--sm btn--ghost" href="/audit">
+              Audit trail
+            </a>
+            <a className="btn btn--sm btn--ghost" href="/dashboard">
+              Dashboard
+            </a>
+          </div>
+        </section>
+      )}
+
       <section className="card">
         <h2>Approval inbox ({pending.length})</h2>
         {pending.length === 0 && <p className="muted">No requests awaiting your approval.</p>}
