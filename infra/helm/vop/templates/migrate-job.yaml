@@ -1,0 +1,34 @@
+{{- if .Values.migrations.enabled }}
+# Runs `prisma migrate deploy` before each install/upgrade (Helm hook). The audit-hardening SQL
+# is applied by the DBA/owner separately (see docs/runbooks/database.md).
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "vop.fullname" . }}-migrate
+  labels: {{- include "vop.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: '-5'
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  template:
+    metadata:
+      labels: {{- include "vop.labels" . | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "vop.api.image" . }}
+          command: ['node', 'node_modules/prisma/build/index.js', 'migrate', 'deploy']
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          envFrom:
+            - secretRef:
+                name: {{ .Values.existingSecret }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

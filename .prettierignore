@@ -8,3 +8,6 @@ pnpm-lock.yaml
 *.md.snap
 apps/api/src/prisma/generated
 sbom.json
+
+# Helm templates are Go-templated YAML, not parseable by prettier
+infra/helm/**/templates/

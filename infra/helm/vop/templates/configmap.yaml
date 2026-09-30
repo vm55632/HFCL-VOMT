@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "vop.fullname" . }}-config
+  labels:
+    {{- include "vop.labels" . | nindent 4 }}
+data:
+  {{- range $k, $v := .Values.config }}
+  {{ $k }}: {{ $v | quote }}
+  {{- end }}
+  VOP_PUBLIC_URL: {{ printf "https://%s" .Values.ingress.host | quote }}
+  VOP_API_URL: {{ printf "https://%s" .Values.ingress.host | quote }}
+  VOP_CORS_ORIGINS: {{ printf "https://%s" .Values.ingress.host | quote }}

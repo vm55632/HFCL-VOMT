@@ -1,0 +1,8 @@
+apiVersion: v2
+name: vop
+description: Enterprise Vendor Onboarding Platform — API + Web, hardened for InfoSec/VAPT.
+type: application
+version: 0.1.0
+appVersion: '0.1.0'
+maintainers:
+  - name: VOP Platform Team

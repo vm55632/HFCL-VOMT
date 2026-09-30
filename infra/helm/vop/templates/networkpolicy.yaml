@@ -1,0 +1,51 @@
+{{- if .Values.networkPolicy.enabled }}
+# Default-deny all ingress to VOP pods, then allow only what's needed (ISO A.8.20 / A.8.22).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vop.fullname" . }}-default-deny
+  labels: {{- include "vop.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes: [Ingress]
+  ingress: []
+---
+# Allow the ingress controller to reach web and api.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vop.fullname" . }}-allow-ingress
+  labels: {{- include "vop.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/component, operator: In, values: [api, web] }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+      ports:
+        - { protocol: TCP, port: {{ .Values.api.port }} }
+        - { protocol: TCP, port: {{ .Values.web.port }} }
+---
+# Allow web → api (server-to-server) within the release.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "vop.fullname" . }}-allow-web-to-api
+  labels: {{- include "vop.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: api
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app.kubernetes.io/component: web }
+      ports:
+        - { protocol: TCP, port: {{ .Values.api.port }} }
+{{- end }}
