@@ -126,6 +126,9 @@ export default function Console() {
           <a className="btn btn--sm btn--ghost" href="/cases">
             Cases
           </a>
+          <a className="btn btn--sm btn--ghost" href="/dashboard">
+            Dashboard
+          </a>
           {me.permissions.includes('vendor:read_all') && (
             <a className="btn btn--sm btn--ghost" href="/review-queue">
               Review queue
@@ -149,6 +152,20 @@ export default function Console() {
             </a>
             <a className="btn btn--sm btn--ghost" href="/admin/workflows">
               Workflows
+            </a>
+          </div>
+        </section>
+      )}
+
+      {me.permissions.includes('audit_log:read') && (
+        <section className="card">
+          <h2>Audit &amp; reporting</h2>
+          <div className="adminlinks">
+            <a className="btn btn--sm btn--ghost" href="/audit">
+              Audit trail
+            </a>
+            <a className="btn btn--sm btn--ghost" href="/dashboard">
+              Dashboard
             </a>
           </div>
         </section>

@@ -108,4 +108,91 @@ export class AuditService {
     }));
     return verifyChain(chain);
   }
+
+  /** Auditor search over the trail. Filters by actor, entity, action and date; newest first. */
+  async query(filters: {
+    actorId?: string;
+    entityType?: string;
+    entityId?: string;
+    action?: string;
+    from?: string;
+    to?: string;
+    skip?: number;
+    take?: number;
+  }): Promise<{ rows: AuditRow[]; total: number }> {
+    const where: Prisma.AuditLogWhereInput = {};
+    if (filters.actorId) where.actorId = filters.actorId;
+    if (filters.entityType) where.entityType = filters.entityType;
+    if (filters.entityId) where.entityId = filters.entityId;
+    if (filters.action) where.action = { contains: filters.action };
+    if (filters.from || filters.to) {
+      where.at = {
+        ...(filters.from ? { gte: new Date(filters.from) } : {}),
+        ...(filters.to ? { lte: new Date(filters.to) } : {}),
+      };
+    }
+    const take = Math.min(filters.take ?? 100, 500);
+    const [rows, total] = await Promise.all([
+      this.prisma.auditLog.findMany({
+        where,
+        orderBy: { seq: 'desc' },
+        skip: filters.skip ?? 0,
+        take,
+      }),
+      this.prisma.auditLog.count({ where }),
+    ]);
+    // seq is BigInt — serialise as string so the JSON response is valid.
+    return {
+      rows: rows.map((r) => ({
+        seq: r.seq.toString(),
+        id: r.id,
+        at: r.at.toISOString(),
+        actorId: r.actorId,
+        actorRole: r.actorRole,
+        ip: r.ip,
+        action: r.action,
+        entityType: r.entityType,
+        entityId: r.entityId,
+        outcome: r.outcome,
+        correlationId: r.correlationId,
+        detail: r.detail ?? null,
+      })),
+      total,
+    };
+  }
+}
+
+export interface AuditRow {
+  seq: string;
+  id: string;
+  at: string;
+  actorId: string | null;
+  actorRole: string | null;
+  ip: string | null;
+  action: string;
+  entityType: string | null;
+  entityId: string | null;
+  outcome: string;
+  correlationId: string | null;
+  detail: unknown;
+}
+
+/** Render audit rows as CSV (values quoted/escaped). The export action is itself audited. */
+export function auditRowsToCsv(rows: AuditRow[]): string {
+  const cols = [
+    'seq',
+    'at',
+    'actorId',
+    'actorRole',
+    'ip',
+    'action',
+    'entityType',
+    'entityId',
+    'outcome',
+    'correlationId',
+  ] as const;
+  const esc = (v: unknown): string => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const header = cols.join(',');
+  const lines = rows.map((r) => cols.map((c) => esc(r[c])).join(','));
+  return [header, ...lines].join('\r\n');
 }

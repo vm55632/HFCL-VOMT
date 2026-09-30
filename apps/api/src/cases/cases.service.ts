@@ -26,6 +26,8 @@ import { FieldEncryptionService } from '../crypto/field-encryption.service';
 import { BlindIndexService } from '../crypto/blind-index.service';
 import { WorkflowsService } from '../workflow/workflows.service';
 import { CategoriesService } from '../master-data/categories.service';
+import { ErpService } from '../lifecycle/erp.service';
+import { NotificationsService } from '../lifecycle/notifications.service';
 import type { AuthUser } from '../auth/auth-user';
 
 export interface CaseCreateInput {
@@ -74,6 +76,8 @@ export class CasesService {
     private readonly blind: BlindIndexService,
     private readonly workflows: WorkflowsService,
     private readonly categories: CategoriesService,
+    private readonly erp: ErpService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // ---------- helpers ----------
@@ -397,6 +401,17 @@ export class CasesService {
       actorId: actor.id,
       detail: { from: c.stage, to: toStage, note: note ? 'provided' : undefined },
     });
+
+    // On activation: push to ERP (idempotent stub) and notify the proposer.
+    if (toStage === 'approved' && c.stage !== 'approved') {
+      await this.erp.activate(id);
+      await this.notifications.notify(
+        c.createdById,
+        'case.approved',
+        `Vendor ${c.legalName} (${c.ref}) has been approved and activated.`,
+        `/cases/${id}`,
+      );
+    }
     return { id, stage: toStage, onHold: data.onHold ?? c.onHold };
   }
 

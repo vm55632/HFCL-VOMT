@@ -109,3 +109,17 @@ code {
 .timeline { list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
 .timeline li { padding: 3px 0; border-left: 2px solid #334155; padding-left: 10px; margin-left: 4px; }
 .grid2 textarea { background: #0b1220; color: var(--text); border: 1px solid #334155; border-radius: 6px; padding: 6px 8px; font-family: inherit; }
+
+/* --- dashboard (Phase 5) --- */
+.kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.kpi { background: var(--panel); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.kpi__n { font-size: 1.9rem; font-weight: 700; }
+.kpi__l { color: var(--muted); font-size: 0.85rem; }
+.kpi--warn .kpi__n { color: #fb923c; }
+.kpi--flag .kpi__n { color: #f87171; }
+.bar { display: grid; grid-template-columns: 120px 1fr 40px; align-items: center; gap: 10px; padding: 4px 0; }
+.bar__label { font-size: 0.85rem; }
+.bar__track { background: #0b1220; border-radius: 4px; height: 16px; overflow: hidden; }
+.bar__fill { display: block; height: 100%; background: var(--accent); }
+.bar__val { text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
