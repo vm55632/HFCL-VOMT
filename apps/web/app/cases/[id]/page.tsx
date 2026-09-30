@@ -46,6 +46,7 @@ interface CaseDetail {
   riskScore: number;
   categoryKey: string;
   vendorCode: string | null;
+  vendorStatus: string;
   pan: string | null;
   gstin: string | null;
   ifsc: string | null;
@@ -169,6 +170,16 @@ export default function CaseDetail() {
     setComment('');
     await load();
   }
+  async function lifecycle(path: 'block' | 'reactivate') {
+    const reason = window.prompt(`Reason to ${path}:`);
+    if (!reason) return;
+    try {
+      await apiFetch(`/cases/${id}/${path}`, { method: 'POST', body: JSON.stringify({ reason }) });
+      await load();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Action failed.');
+    }
+  }
 
   if (!c) return <main className="wrap">{msg ? <p className="error">{msg}</p> : 'Loading…'}</main>;
 
@@ -217,8 +228,26 @@ export default function CaseDetail() {
               {a}
             </button>
           ))}
+          {c.stage === 'approved' && c.vendorStatus === 'ACTIVE' && (
+            <button className="btn btn--sm btn--ghost" onClick={() => void lifecycle('block')}>
+              block vendor
+            </button>
+          )}
+          {c.stage === 'approved' && c.vendorStatus === 'BLOCKED' && (
+            <button className="btn btn--sm" onClick={() => void lifecycle('reactivate')}>
+              reactivate
+            </button>
+          )}
         </div>
       </div>
+      {c.stage === 'approved' && (
+        <p className="note">
+          Vendor status:{' '}
+          <span className={`pill ${c.vendorStatus === 'ACTIVE' ? 'pill--ok' : 'tier--critical'}`}>
+            {c.vendorStatus}
+          </span>
+        </p>
+      )}
       {msg && (
         <p className="note" role="status">
           {msg}

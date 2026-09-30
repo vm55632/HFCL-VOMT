@@ -20,6 +20,7 @@ import { CasesModule } from './cases/cases.module';
 import { DocumentsModule } from './documents/documents.module';
 import { VerificationModule } from './verification/verification.module';
 import { ReportingModule } from './reporting/reporting.module';
+import { LifecycleModule } from './lifecycle/lifecycle.module';
 import { SessionGuard } from './auth/session.guard';
 import { PermissionsGuard } from './authz/permissions.guard';
 
@@ -47,6 +48,7 @@ import { PermissionsGuard } from './authz/permissions.guard';
     DocumentsModule,
     VerificationModule,
     ReportingModule,
+    LifecycleModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },
