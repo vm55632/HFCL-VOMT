@@ -1,0 +1,20 @@
+# On-prem overrides (first deployment target — ADR-0002). Self-hosted backing services.
+image:
+  registry: registry.vop.internal
+
+config:
+  VOP_STORAGE_DRIVER: minio
+  VOP_SECRETS_DRIVER: vault
+  VOP_KEY_DRIVER: vault-transit
+  VOP_SCAN_DRIVER: clamav
+  VOP_QUEUE_DRIVER: redis
+
+ingress:
+  className: nginx
+  host: vop.corp.internal
+  tls:
+    enabled: true
+    secretName: vop-tls
+
+# Secrets synced from on-prem HashiCorp Vault into the `vop-secrets` Secret.
+existingSecret: vop-secrets

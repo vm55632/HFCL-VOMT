@@ -1,0 +1,96 @@
+# Default values for VOP. Override per environment (values-onprem.yaml, values-<cloud>.yaml).
+nameOverride: ''
+fullnameOverride: ''
+
+image:
+  registry: registry.example.local
+  api:
+    repository: vop/api
+    tag: '' # defaults to Chart.appVersion
+  web:
+    repository: vop/web
+    tag: ''
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+api:
+  replicaCount: 3
+  port: 3000
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: '1', memory: 768Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 12
+    targetCPUUtilizationPercentage: 70
+
+web:
+  replicaCount: 2
+  port: 3001
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 512Mi }
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# Non-secret configuration surface (VOP_* env). Secrets come from `existingSecret`.
+config:
+  NODE_ENV: production
+  VOP_DATA_REGION: in
+  VOP_STORAGE_DRIVER: s3
+  VOP_SECRETS_DRIVER: vault
+  VOP_EMAIL_DRIVER: smtp
+  VOP_QUEUE_DRIVER: redis
+  VOP_SCAN_DRIVER: clamav
+  VOP_KEY_DRIVER: vault-transit
+  VOP_VERIFICATION_DRIVER: mock
+  VOP_JOBS_ENABLED: 'true'
+  VOP_COOKIE_SECURE: 'true'
+  VOP_OTEL_ENABLED: 'true'
+
+# Secrets (DATABASE_URL, REDIS_URL, VOP_MASTER_KEY, VOP_BLIND_INDEX_KEY, OIDC secret, storage keys)
+# are supplied by a pre-created Secret (e.g. synced from Vault/KMS by an external-secrets operator).
+# The chart never contains secret values.
+existingSecret: vop-secrets
+
+ingress:
+  enabled: true
+  className: nginx
+  host: vop.example.local
+  tls:
+    enabled: true
+    secretName: vop-tls
+  # Recommended WAF/security annotations (documented in docs/runbooks).
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: 'true'
+    nginx.ingress.kubernetes.io/proxy-body-size: 25m
+
+# Hardened pod security (ASVS 14.1 / ISO A.8.9). Applied to every workload.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  capabilities:
+    drop: ['ALL']
+
+# Default-deny NetworkPolicy + explicit allows (pod-to-pod restriction).
+networkPolicy:
+  enabled: true
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Run `prisma migrate deploy` as a pre-upgrade Job.
+migrations:
+  enabled: true

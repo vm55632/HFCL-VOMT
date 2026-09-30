@@ -1,0 +1,15 @@
+VOP {{ .Chart.AppVersion }} deployed as release "{{ .Release.Name }}".
+
+  Web:  https://{{ .Values.ingress.host }}/
+  API:  https://{{ .Values.ingress.host }}/api/v1/health/ready
+
+Checklist:
+  1. Ensure the Secret "{{ .Values.existingSecret }}" exists (DATABASE_URL, REDIS_URL,
+     VOP_MASTER_KEY, VOP_BLIND_INDEX_KEY, OIDC client secret, storage keys) — synced from
+     Vault/KMS by your external-secrets operator. The chart never holds secret values.
+  2. TLS secret "{{ .Values.ingress.tls.secretName }}" must be present for HTTPS.
+  3. The pre-upgrade Job ran `prisma migrate deploy`. Apply the audit-hardening SQL once
+     per environment (docs/runbooks/database.md).
+
+Hardening applied: non-root + read-only rootfs + dropped caps + seccomp; HPA; PDB;
+default-deny NetworkPolicy with explicit allows. See docs/security/SECURITY_CONTROLS.md.
