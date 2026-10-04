@@ -95,7 +95,9 @@ export class SessionService {
   setCookie(res: Response, raw: string): void {
     res.cookie(this.cookieName, raw, {
       httpOnly: true,
-      sameSite: 'strict',
+      // `strict` same-site by default; set VOP_COOKIE_SAMESITE=none (+ Secure) to allow the session
+      // cookie to be sent from a cross-site web app (e.g. a Vercel domain calling this API host).
+      sameSite: this.config.session.cookieSameSite,
       secure: this.config.session.cookieSecure,
       path: '/',
       maxAge: this.config.session.absoluteHours * 3_600_000,
@@ -105,7 +107,7 @@ export class SessionService {
   clearCookie(res: Response): void {
     res.clearCookie(this.cookieName, {
       httpOnly: true,
-      sameSite: 'strict',
+      sameSite: this.config.session.cookieSameSite,
       secure: this.config.session.cookieSecure,
       path: '/',
     });

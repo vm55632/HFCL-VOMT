@@ -33,13 +33,19 @@ built-in local/SSO login.
 ## 3. Make the API reachable from Vercel
 
 The web app authenticates by sending the Supabase JWT as a `Bearer` token (works cross-origin), and
-also sends cookies (`credentials: 'include'`). On the API side:
+also sends cookies (`credentials: 'include'`). The API already supports cross-site setup — set these
+env vars on the **API host** (serve the API over HTTPS):
 
-- **CORS:** allow the Vercel origin (e.g. `https://your-app.vercel.app` and any custom domain) with
-  credentials enabled.
-- **Cookies:** for the httpOnly session cookie to work cross-site, set it `SameSite=None; Secure`.
-  (Bearer-token auth still works even if the cross-site cookie is dropped.)
-- Serve the API over **HTTPS**.
+| Variable                         | Value                                                        | Purpose                                                        |
+| -------------------------------- | ------------------------------------------------------------ | -------------------------------------------------------------- |
+| `VOP_CORS_ORIGINS`               | `https://your-app.vercel.app,https://vendor.your-domain.com` | Comma-separated allow-list of your web origins (never `*`).    |
+| `VOP_CORS_ALLOW_VERCEL_PREVIEWS` | `true` (optional)                                            | Also accept any `https://*.vercel.app` preview URL.            |
+| `VOP_COOKIE_SECURE`              | `true`                                                       | Required in production (and for `SameSite=None`).              |
+| `VOP_COOKIE_SAMESITE`            | `none`                                                       | Lets the httpOnly session cookie be sent from the Vercel site. |
+
+With `VOP_COOKIE_SAMESITE=none` + `VOP_COOKIE_SECURE=true` the session cookie works cross-site; even
+if a browser drops it, Bearer-token (Supabase) auth still works. CORS is enforced from the allow-list
+above with `credentials` enabled.
 
 ## 4. Deploy
 

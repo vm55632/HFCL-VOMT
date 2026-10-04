@@ -103,6 +103,9 @@ export const envSchema = z
     VOP_SESSION_IDLE_MINUTES: numish(15),
     VOP_SESSION_ABSOLUTE_HOURS: numish(8),
     VOP_COOKIE_SECURE: boolish(false),
+    // Cookie SameSite. Use `none` when the web app is on a different site than the API
+    // (e.g. a Vercel domain calling the API host); `none` requires VOP_COOKIE_SECURE=true.
+    VOP_COOKIE_SAMESITE: z.enum(['lax', 'strict', 'none']).default('lax'),
 
     // identity
     VOP_OIDC_ISSUER: z.string().optional(),
@@ -130,6 +133,9 @@ export const envSchema = z
 
     // cors (comma-separated allow-list, never *)
     VOP_CORS_ORIGINS: z.string().default('http://localhost:3001'),
+    // Also allow any https://*.vercel.app origin (for Vercel preview deployments, whose URLs are
+    // generated per deploy). Keep off in production unless you intend to accept all previews.
+    VOP_CORS_ALLOW_VERCEL_PREVIEWS: boolish(false),
 
     // PAN verification via EY Nexus CVR-API (real adapter). Credentials are secrets.
     VOP_PAN_VERIFY_ENABLED: boolish(false),
@@ -166,6 +172,15 @@ export const envSchema = z
         code: z.ZodIssueCode.custom,
         path: ['VOP_COOKIE_SECURE'],
         message: 'Cookies must be Secure in production (serve behind TLS).',
+      });
+    }
+    // Browsers reject SameSite=None cookies that aren't also Secure.
+    if (env.VOP_COOKIE_SAMESITE === 'none' && !env.VOP_COOKIE_SECURE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['VOP_COOKIE_SAMESITE'],
+        message:
+          'SameSite=None requires VOP_COOKIE_SECURE=true (cross-site cookies must be Secure).',
       });
     }
     // CORS must never be a wildcard.

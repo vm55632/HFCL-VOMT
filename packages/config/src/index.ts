@@ -10,7 +10,13 @@ export interface AppConfig {
   env: Env['NODE_ENV'];
   isProduction: boolean;
   isTest: boolean;
-  api: { port: number; url: string; publicUrl: string; corsOrigins: string[] };
+  api: {
+    port: number;
+    url: string;
+    publicUrl: string;
+    corsOrigins: string[];
+    allowVercelPreviews: boolean;
+  };
   data: { region: string; auditRetentionDays: number };
   database: { url: string };
   redis: { url: string };
@@ -49,6 +55,7 @@ export interface AppConfig {
     idleMinutes: number;
     absoluteHours: number;
     cookieSecure: boolean;
+    cookieSameSite: 'lax' | 'strict' | 'none';
   };
   identity: {
     oidc: { issuer?: string; clientId?: string; clientSecret?: string; redirectUri?: string };
@@ -86,6 +93,7 @@ function shape(env: Env): AppConfig {
       corsOrigins: env.VOP_CORS_ORIGINS.split(',')
         .map((o) => o.trim())
         .filter(Boolean),
+      allowVercelPreviews: env.VOP_CORS_ALLOW_VERCEL_PREVIEWS,
     },
     data: { region: env.VOP_DATA_REGION, auditRetentionDays: env.VOP_AUDIT_RETENTION_DAYS },
     database: { url: env.DATABASE_URL },
@@ -125,6 +133,7 @@ function shape(env: Env): AppConfig {
       idleMinutes: env.VOP_SESSION_IDLE_MINUTES,
       absoluteHours: env.VOP_SESSION_ABSOLUTE_HOURS,
       cookieSecure: env.VOP_COOKIE_SECURE,
+      cookieSameSite: env.VOP_COOKIE_SAMESITE,
     },
     identity: {
       oidc: {

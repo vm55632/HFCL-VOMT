@@ -35,9 +35,19 @@ async function bootstrap(): Promise<void> {
   app.disable('x-powered-by');
   app.use(cookieParser());
 
-  // CORS allow-list from config — never a wildcard (validated in @vop/config).
+  // CORS allow-list from config — never a wildcard (validated in @vop/config). When
+  // VOP_CORS_ALLOW_VERCEL_PREVIEWS is on, any https://*.vercel.app origin is also accepted
+  // (per-deploy Vercel preview URLs). Credentials are enabled for cookie + Bearer auth.
+  const allowed = new Set(config.api.corsOrigins);
+  const vercelPreview = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i;
   app.enableCors({
-    origin: config.api.corsOrigins,
+    origin: (origin, cb) => {
+      // Non-browser clients (curl, server-to-server) send no Origin — allow them.
+      if (!origin) return cb(null, true);
+      if (allowed.has(origin)) return cb(null, true);
+      if (config.api.allowVercelPreviews && vercelPreview.test(origin)) return cb(null, true);
+      return cb(null, false);
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   });
