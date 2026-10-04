@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../../lib/api';
@@ -27,10 +28,10 @@ export default function ReviewQueue() {
   return (
     <main className="wrap">
       <p className="crumbs">
-        <a href="/console">← Console</a> · <a href="/cases">Cases</a>
+        <Link href="/console">Console</Link> · <Link href="/cases">Cases</Link>
       </p>
       <h1>Manual review queue</h1>
-      <p className="lead">Cases flagged by verification — {rows.length}.</p>
+      <p className="lead">Cases flagged by verification · {rows.length}.</p>
       {msg && <p className="note">{msg}</p>}
 
       <section className="card">
@@ -49,9 +50,9 @@ export default function ReviewQueue() {
             {rows.map((r) => (
               <tr key={r.case.id}>
                 <td>
-                  <a href={`/cases/${r.case.id}`}>
+                  <Link href={`/cases/${r.case.id}`}>
                     <code>{r.case.ref}</code>
-                  </a>
+                  </Link>
                 </td>
                 <td>{r.case.legalName}</td>
                 <td>
@@ -61,11 +62,11 @@ export default function ReviewQueue() {
                   <span className={`pill tier--${r.case.tier}`}>{r.case.tier}</span>
                 </td>
                 <td>
-                  <span className="pill">{r.nameMatchVerdict ?? '—'}</span>
+                  <span className="pill">{r.nameMatchVerdict ?? '-'}</span>
                 </td>
                 <td>
                   {r.redFlags.length === 0
-                    ? '—'
+                    ? '-'
                     : r.redFlags.map((f) => (
                         <span
                           key={f.key}

@@ -196,12 +196,21 @@ export function evaluateTransition(
       const to = nextStage(def, currentKey, ctx.tier);
       return { allowed: true, toStageKey: to?.key };
     }
-    case 'return':
-    case 'hold':
+    case 'return': {
+      // Send the case back to the immediately previous stage (the previous actor), not forward.
+      if (!ctx.isStageOwner) return ownerDenied(stage);
+      const path = applicablePath(def, ctx.tier);
+      const idx = path.findIndex((s) => s.key === currentKey);
+      const prev = idx > 0 ? path[idx - 1] : path[0];
+      return { allowed: true, toStageKey: prev?.key ?? currentKey };
+    }
+    case 'hold': {
+      if (!ctx.isStageOwner) return ownerDenied(stage);
+      return { allowed: true, toStageKey: currentKey };
+    }
     case 'reject': {
       if (!ctx.isStageOwner) return ownerDenied(stage);
-      if (action === 'reject') return { allowed: true, toStageKey: def.rejectStageKey };
-      return { allowed: true, toStageKey: currentKey };
+      return { allowed: true, toStageKey: def.rejectStageKey };
     }
     case 'resume': {
       if (!ctx.isStageOwner) return ownerDenied(stage);

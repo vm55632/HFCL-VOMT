@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -76,7 +77,7 @@ export default function WorkflowsAdmin() {
   return (
     <main className="wrap">
       <p className="crumbs">
-        <a href="/console">← Console</a> · <a href="/admin/categories">Categories</a>
+        <Link href="/console">Console</Link> · <Link href="/admin/categories">Categories</Link>
       </p>
       <h1>Workflows</h1>
       <p className="lead">Versioned workflow definitions. Published versions are immutable.</p>
@@ -117,9 +118,9 @@ export default function WorkflowsAdmin() {
                 </td>
                 <td>{w.stages.length}</td>
                 <td>
-                  <a className="btn btn--sm btn--ghost" href={`/admin/workflows/${w.id}`}>
+                  <Link className="btn btn--sm btn--ghost" href={`/admin/workflows/${w.id}`}>
                     Open
-                  </a>
+                  </Link>
                 </td>
               </tr>
             ))}

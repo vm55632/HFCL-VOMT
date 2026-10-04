@@ -7,7 +7,14 @@
  * Run: pnpm --filter @vop/api prisma:seed   (build @vop/shared first so it resolves).
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
-import { ROLES, RoleKey, newId, DEFAULT_CATEGORIES, DEFAULT_WORKFLOW } from '@vop/shared';
+import {
+  ROLES,
+  RoleKey,
+  newId,
+  DEFAULT_CATEGORIES,
+  DEFAULT_SUBCATEGORIES,
+  DEFAULT_WORKFLOW,
+} from '@vop/shared';
 import { PasswordService } from '../src/auth/password.service';
 
 const prisma = new PrismaClient();
@@ -129,7 +136,8 @@ async function seedBreakGlass(): Promise<void> {
     console.warn('  break-glass: VOP_SEED_ADMIN_PASSWORD not set — no local password seeded');
     return;
   }
-  const { salt, hash } = await new PasswordService().hash(password);
+  const pw = new PasswordService();
+  const { salt, hash } = await pw.hash(password);
   await prisma.user.update({
     where: { email: 'priya.nair@vop.local' },
     data: { pwSalt: salt, pwHash: hash, mustChangePassword: true },
@@ -137,6 +145,20 @@ async function seedBreakGlass(): Promise<void> {
   console.warn(
     '  break-glass: local password set for priya.nair@vop.local (must change on first use)',
   );
+
+  // Optional separate login for the Platform (product) admin, who owns the
+  // Administration area. From VOP_SEED_PLATFORM_ADMIN_PASSWORD; never hardcoded.
+  const adminPw = process.env.VOP_SEED_PLATFORM_ADMIN_PASSWORD;
+  if (adminPw) {
+    const { salt: s2, hash: h2 } = await pw.hash(adminPw);
+    await prisma.user.update({
+      where: { email: 'platform.admin@vop.local' },
+      data: { pwSalt: s2, pwHash: h2, mustChangePassword: true },
+    });
+    console.warn(
+      '  break-glass: local password set for platform.admin@vop.local (must change on first use)',
+    );
+  }
 }
 
 /** Seed vendor categories and the default published workflow (Phase 2 master data). */
@@ -159,6 +181,26 @@ async function seedMasterData(): Promise<void> {
     });
   }
   console.warn(`  categories: ${DEFAULT_CATEGORIES.length} upserted`);
+
+  for (const s of DEFAULT_SUBCATEGORIES) {
+    await prisma.vendorSubCategory.upsert({
+      where: { key: s.key },
+      create: {
+        id: newId(),
+        key: s.key,
+        name: s.name,
+        categoryKey: s.categoryKey,
+        sortOrder: s.sortOrder,
+      },
+      update: { name: s.name, categoryKey: s.categoryKey, sortOrder: s.sortOrder },
+    });
+  }
+  console.warn(`  sub-categories: ${DEFAULT_SUBCATEGORIES.length} upserted`);
+
+  // Remove any legacy categories no longer in the master list (dev convenience; safe pre-cases).
+  const keep = DEFAULT_CATEGORIES.map((c) => c.key);
+  const removed = await prisma.vendorCategory.deleteMany({ where: { key: { notIn: keep } } });
+  if (removed.count > 0) console.warn(`  categories: ${removed.count} legacy removed`);
 
   const wf = DEFAULT_WORKFLOW;
   const existing = await prisma.workflowDefinition.findUnique({

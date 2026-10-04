@@ -31,6 +31,7 @@ prisma/generated/
 # logs
 logs/
 *.log
+*.log.err
 npm-debug.log*
 pnpm-debug.log*
 

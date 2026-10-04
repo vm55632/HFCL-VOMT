@@ -24,6 +24,7 @@ export enum AuthMethod {
   Saml = 'SAML',
   Local = 'LOCAL',
   VendorOtp = 'VENDOR_OTP',
+  Supabase = 'SUPABASE',
 }
 
 /** Outcome recorded on an audit entry. */

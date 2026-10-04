@@ -1,8 +1,10 @@
 'use client';
+import Link from 'next/link';
 
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { apiFetch, ApiError } from '../../../../lib/api';
+import { SkeletonLines } from '../../../../components/Skeleton';
 
 const TIERS = ['low', 'medium', 'high', 'critical'] as const;
 const ROLE_OPTIONS = ['proposer', 'procurement', 'compliance', 'finance', 'approver'];
@@ -121,12 +123,23 @@ export default function WorkflowDetail() {
     }
   }
 
-  if (!wf) return <main className="wrap">{msg ? <p className="error">{msg}</p> : 'Loading…'}</main>;
+  if (!wf)
+    return (
+      <main className="wrap">
+        {msg ? (
+          <p className="error">{msg}</p>
+        ) : (
+          <div className="card">
+            <SkeletonLines count={5} />
+          </div>
+        )}
+      </main>
+    );
 
   return (
     <main className="wrap">
       <p className="crumbs">
-        <a href="/admin/workflows">← Workflows</a>
+        <Link href="/admin/workflows">Workflows</Link>
       </p>
       <div className="topbar">
         <div>
@@ -225,7 +238,7 @@ export default function WorkflowDetail() {
                       value={s.ownerRole ?? ''}
                       onChange={(e) => patchStage(i, { ownerRole: e.target.value || null })}
                     >
-                      <option value="">— none —</option>
+                      <option value="">(none)</option>
                       {ROLE_OPTIONS.map((r) => (
                         <option key={r} value={r}>
                           {r}
@@ -233,7 +246,7 @@ export default function WorkflowDetail() {
                       ))}
                     </select>
                   ) : (
-                    (s.ownerRole ?? '—')
+                    (s.ownerRole ?? '-')
                   )}
                 </td>
                 <td>

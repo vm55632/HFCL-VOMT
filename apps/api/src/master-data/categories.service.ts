@@ -21,11 +21,18 @@ export class CategoriesService {
     private readonly audit: AuditService,
   ) {}
 
-  /** Categories for the intake form (active only) or the full set for admins. */
+  /** Categories for the intake form (active only) or the full set for admins, each with its
+   *  sub-categories (VOMT account groups) for the dependent dropdown. */
   list(includeInactive = false) {
     return this.prisma.vendorCategory.findMany({
       where: includeInactive ? {} : { active: true },
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      include: {
+        subCategories: {
+          where: includeInactive ? {} : { active: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+      },
     });
   }
 

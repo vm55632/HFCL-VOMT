@@ -8,9 +8,13 @@ import {
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { UserStatus, type Permission } from '@vop/shared';
+import type { AppConfig } from '@vop/config';
 import { IS_PUBLIC_KEY } from '../authz/public.decorator';
 import { SessionService } from './session.service';
+import { SupabaseAuthService } from './supabase.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { APP_CONFIG } from '../config/config.module';
+import { Inject } from '@nestjs/common';
 import { requestContext } from '../common/context';
 import type { AuthUser, AuthedRequest } from './auth-user';
 
@@ -26,6 +30,8 @@ export class SessionGuard implements CanActivate {
     private readonly reflector: Reflector,
     private readonly sessions: SessionService,
     private readonly prisma: PrismaService,
+    private readonly supabase: SupabaseAuthService,
+    @Inject(APP_CONFIG) private readonly config: AppConfig,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -36,15 +42,30 @@ export class SessionGuard implements CanActivate {
     if (isPublic) return true;
 
     const req = context.switchToHttp().getRequest<Request & AuthedRequest>();
-    const cookies = (req as Request & { cookies?: Record<string, string> }).cookies ?? {};
-    const raw = cookies[this.sessions.cookieName];
-    if (!raw) throw new UnauthorizedException('Authentication required.');
 
-    const validated = await this.sessions.authenticate(raw);
-    if (!validated) throw new UnauthorizedException('Session invalid or expired.');
+    // Resolve the authenticated principal id + session id from the active auth driver.
+    let userId: string;
+    let sessionId: string;
+
+    if (this.config.auth.driver === 'supabase') {
+      const token = bearerToken(req.headers.authorization);
+      if (!token) throw new UnauthorizedException('Authentication required.');
+      const resolved = await this.supabase.verifyAndResolve(token);
+      if (!resolved) throw new UnauthorizedException('Session invalid or expired.');
+      userId = resolved.userId;
+      sessionId = resolved.sessionId;
+    } else {
+      const cookies = (req as Request & { cookies?: Record<string, string> }).cookies ?? {};
+      const raw = cookies[this.sessions.cookieName];
+      if (!raw) throw new UnauthorizedException('Authentication required.');
+      const validated = await this.sessions.authenticate(raw);
+      if (!validated) throw new UnauthorizedException('Session invalid or expired.');
+      userId = validated.userId;
+      sessionId = validated.sessionId;
+    }
 
     const user = await this.prisma.user.findUnique({
-      where: { id: validated.userId },
+      where: { id: userId },
       include: { roles: true },
     });
     if (!user) throw new UnauthorizedException('Session invalid or expired.');
@@ -65,7 +86,7 @@ export class SessionGuard implements CanActivate {
       roles: user.roles.map((r) => r.key),
       permissions,
       managerId: user.managerId,
-      sessionId: validated.sessionId,
+      sessionId,
     };
     req.user = principal;
 
@@ -77,4 +98,11 @@ export class SessionGuard implements CanActivate {
     }
     return true;
   }
+}
+
+/** Extract a bearer token from an Authorization header. */
+function bearerToken(header: string | undefined): string | null {
+  if (!header) return null;
+  const [scheme, value] = header.split(' ');
+  return scheme?.toLowerCase() === 'bearer' && value ? value.trim() : null;
 }

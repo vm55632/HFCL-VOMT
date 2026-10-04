@@ -1,8 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { apiFetch, ApiError, API_BASE } from '../../../lib/api';
+import { SkeletonLines } from '../../../components/Skeleton';
+import ParallelReview from '../../../components/ParallelReview';
 
 interface ChecklistItem {
   id: string;
@@ -38,11 +41,20 @@ interface Doc {
 interface CaseDetail {
   id: string;
   ref: string;
+  createdById: string;
   legalName: string;
   tradeName: string | null;
+  businessAddress: string | null;
   stage: string;
   tier: string;
   onHold: boolean;
+  infosecRequired: boolean;
+  isecItHardware: boolean;
+  isecItSoftware: boolean;
+  isecAccessSystem: boolean;
+  isecAccessNetwork: boolean;
+  isecAccessApps: boolean;
+  isecAccessPii: boolean;
   riskScore: number;
   categoryKey: string;
   vendorCode: string | null;
@@ -58,6 +70,18 @@ interface CaseDetail {
   checklist: ChecklistItem[];
   comments: Comment[];
   activity: Activity[];
+  stages?: Record<string, StageRow | null>;
+  reviewStages?: string[];
+}
+interface StageRow {
+  status: string;
+  decision: string | null;
+  remark: string | null;
+  actionedById: string | null;
+  actionedByName?: string | null;
+  enteredAt: string | null;
+  completedAt: string | null;
+  data?: { agreement?: string } | null;
 }
 interface CrossCheck {
   key: string;
@@ -87,18 +111,30 @@ const NEEDS_NOTE = new Set(['return', 'reject', 'hold', 'reopen']);
 
 export default function CaseDetail() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [c, setC] = useState<CaseDetail | null>(null);
   const [docs, setDocs] = useState<Doc[]>([]);
   const [ver, setVer] = useState<Verification | null>(null);
   const [docType, setDocType] = useState('pan_card');
   const [comment, setComment] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
+  const [perms, setPerms] = useState<string[]>([]);
+  const [roles, setRoles] = useState<string[]>([]);
+  const [meId, setMeId] = useState<string>('');
+  const [agreement, setAgreement] = useState('');
 
   const load = useCallback(async () => {
     try {
       setC(await apiFetch<CaseDetail>(`/cases/${id}`));
       setDocs(await apiFetch<Doc[]>(`/cases/${id}/documents`));
       setVer(await apiFetch<Verification | null>(`/cases/${id}/verification`));
+      await apiFetch<{ id: string; permissions: string[]; roles: string[] }>('/auth/me')
+        .then((m) => {
+          setPerms(m.permissions);
+          setRoles(m.roles ?? []);
+          setMeId(m.id);
+        })
+        .catch(() => undefined);
     } catch (err) {
       setMsg(err instanceof ApiError ? err.message : 'Failed to load.');
     }
@@ -137,6 +173,16 @@ export default function CaseDetail() {
     void load();
   }, [load]);
 
+  // A proposer opening their own case that needs their changes (a fresh draft, or a stage sent back
+  // to them) goes straight to the editable form pre-filled with what they entered.
+  useEffect(() => {
+    if (!c || !meId || meId !== c.createdById) return;
+    const hasSentBack = (c.reviewStages ?? []).some((s) => c.stages?.[s]?.status === 'sent_back');
+    if (c.stage === 'draft' || hasSentBack) {
+      router.replace(`/cases/new?id=${c.id}`);
+    }
+  }, [c, meId, router]);
+
   async function act(action: string) {
     setMsg(null);
     let note: string | undefined;
@@ -170,6 +216,49 @@ export default function CaseDetail() {
     setComment('');
     await load();
   }
+  async function infosecDecision(decision: 'approve' | 'reject' | 'sendback') {
+    return stageDecision('infosec', decision);
+  }
+  async function stageDecision(
+    stage: string,
+    decision: 'approve' | 'reject' | 'sendback',
+    agreement?: string,
+  ) {
+    let note: string | undefined;
+    if (decision !== 'approve') {
+      note =
+        window.prompt(`Remark for ${decision === 'reject' ? 'rejection' : 'sending back'}:`) ??
+        undefined;
+      if (!note) return;
+    }
+    try {
+      await apiFetch(`/cases/${id}/stage/${stage}/decision`, {
+        method: 'POST',
+        body: JSON.stringify({ decision, note, agreement }),
+      });
+      await load();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Action failed.');
+    }
+  }
+  async function sapDecision(decision: 'approve' | 'reject') {
+    let note: string | undefined;
+    if (decision === 'reject') {
+      note = window.prompt('Remark for rejection:') ?? undefined;
+      if (!note) return;
+    } else if (!window.confirm('Confirm this vendor into SAP/ERP and activate it?')) {
+      return;
+    }
+    try {
+      await apiFetch(`/cases/${id}/sap-decision`, {
+        method: 'POST',
+        body: JSON.stringify({ decision, note }),
+      });
+      await load();
+    } catch (err) {
+      setMsg(err instanceof Error ? err.message : 'Action failed.');
+    }
+  }
   async function lifecycle(path: 'block' | 'reactivate') {
     const reason = window.prompt(`Reason to ${path}:`);
     if (!reason) return;
@@ -181,25 +270,230 @@ export default function CaseDetail() {
     }
   }
 
-  if (!c) return <main className="wrap">{msg ? <p className="error">{msg}</p> : 'Loading…'}</main>;
+  if (!c)
+    return (
+      <main className="wrap">
+        {msg ? (
+          <p className="error">{msg}</p>
+        ) : (
+          <div className="card">
+            <SkeletonLines count={5} />
+          </div>
+        )}
+      </main>
+    );
+
+  const STAGE_LABELS: Record<string, string> = {
+    infosec: 'InfoSec',
+    fcu: 'FCU',
+    operation: 'Operation',
+    legal: 'Legal',
+    sap: 'SAP confirmation',
+  };
+  const REVIEW_ROLES = ['infosec', 'fcu', 'operation', 'legal'];
+  // The one parallel stage this viewer owns and which is awaiting them.
+  const myStage = (c.reviewStages ?? []).find(
+    (s) => REVIEW_ROLES.includes(s) && roles.includes(s) && c.stages?.[s]?.status === 'pending',
+  );
+  const isSapReviewer = roles.includes('sap');
+  const vendorCard = (
+    <section className="card">
+      <h2>Vendor</h2>
+      <div className="grid2">
+        <div>
+          Legal name <strong>{c.legalName}</strong>
+        </div>
+        <div>Trade name {c.tradeName ?? '-'}</div>
+        <div className="span2">Business address {c.businessAddress ?? '-'}</div>
+        <div>
+          GSTIN <code>{c.gstin ?? '-'}</code>
+        </div>
+        <div>Contact {c.contactEmail ?? '-'}</div>
+        <div className="muted">
+          Category {c.categoryKey} · tier {c.tier}
+        </div>
+      </div>
+    </section>
+  );
+
+  // A parallel reviewer (InfoSec/FCU/Operation/Legal) gets a clean, focused review screen.
+  if (myStage) {
+    const answers: [string, boolean][] = [
+      ['Information Technology — Hardware', c.isecItHardware],
+      ['Information Technology — Software', c.isecItSoftware],
+      ["Access to HFCL's systems", c.isecAccessSystem],
+      ["Access to HFCL's IT network", c.isecAccessNetwork],
+      ["Access to HFCL's applications", c.isecAccessApps],
+      ['Access to PII (customer / employee / partner)', c.isecAccessPii],
+    ];
+    return (
+      <main className="wrap">
+        <p className="crumbs">
+          <Link href={`/stages/${myStage}`}>{STAGE_LABELS[myStage]} queue</Link>
+        </p>
+        <div className="topbar">
+          <div>
+            <h1>{c.legalName}</h1>
+            <p className="lead">
+              <code>{c.ref}</code> ·{' '}
+              <span className="pill pill--warn">{STAGE_LABELS[myStage]} review</span>
+            </p>
+          </div>
+          <div className="req__actions">
+            <button
+              className="btn btn--sm"
+              onClick={() =>
+                void stageDecision(myStage, 'approve', myStage === 'legal' ? agreement : undefined)
+              }
+            >
+              Approve
+            </button>
+            <button
+              className="btn btn--sm btn--ghost"
+              onClick={() => void stageDecision(myStage, 'sendback')}
+            >
+              Send back
+            </button>
+            <button
+              className="btn btn--sm btn--ghost"
+              onClick={() => void stageDecision(myStage, 'reject')}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+        {msg && (
+          <p className="note" role="status">
+            {msg}
+          </p>
+        )}
+
+        {vendorCard}
+
+        {myStage === 'infosec' && (
+          <section className="card">
+            <h2>Access requested</h2>
+            <p className="section-intro">Why this case was routed to InfoSec.</p>
+            <div className="qlist">
+              {answers.map(([label, val]) => (
+                <div key={label} className="qrow">
+                  <span className="qrow__label">{label}</span>
+                  <span className={`pill ${val ? 'pill--warn' : ''}`}>{val ? 'Yes' : 'No'}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {myStage === 'legal' && (
+          <section className="card">
+            <h2>Draft the agreement</h2>
+            <p className="section-intro">
+              Draft the vendor agreement text below. It is saved with your approval.
+            </p>
+            <textarea
+              value={agreement}
+              onChange={(e) => setAgreement(e.target.value)}
+              placeholder="Agreement clauses, terms, special conditions…"
+              rows={10}
+              style={{ width: '100%' }}
+            />
+          </section>
+        )}
+      </main>
+    );
+  }
+
+  // SAP confirmation — final stage. Shows every parallel stage's completion, then confirms.
+  if (isSapReviewer && (c.stage === 'sap' || c.stage === 'approved' || c.stage === 'rejected')) {
+    const active = c.reviewStages ?? [];
+    const allDone = active.every((s) => c.stages?.[s]?.status === 'approved');
+    return (
+      <main className="wrap">
+        <p className="crumbs">
+          <Link href="/stages/sap">SAP confirmation queue</Link>
+        </p>
+        <div className="topbar">
+          <div>
+            <h1>{c.legalName}</h1>
+            <p className="lead">
+              <code>{c.ref}</code> ·{' '}
+              <span
+                className={`pill ${c.stage === 'approved' ? 'pill--ok' : c.stage === 'rejected' ? 'pill--danger' : 'pill--warn'}`}
+              >
+                {STAGE_LABELS.sap}: {c.stage}
+              </span>
+            </p>
+          </div>
+          {c.stage === 'sap' && (
+            <div className="req__actions">
+              <button
+                className="btn btn--sm"
+                disabled={!allDone}
+                onClick={() => void sapDecision('approve')}
+              >
+                Confirm &amp; activate
+              </button>
+              <button className="btn btn--sm btn--ghost" onClick={() => void sapDecision('reject')}>
+                Reject
+              </button>
+            </div>
+          )}
+        </div>
+        {msg && (
+          <p className="note" role="status">
+            {msg}
+          </p>
+        )}
+
+        {vendorCard}
+
+        <ParallelReview
+          stages={c.stages ?? {}}
+          reviewStages={active}
+          caseStage={c.stage}
+          canConfirmSap
+          onConfirmSap={() => void sapDecision('approve')}
+        />
+
+        {c.stages?.legal?.data?.agreement && (
+          <section className="card">
+            <h2>Legal agreement</h2>
+            <pre style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{c.stages.legal.data.agreement}</pre>
+          </section>
+        )}
+      </main>
+    );
+  }
 
   const terminal = c.stage === 'approved' || c.stage === 'rejected';
-  const actions =
-    c.stage === 'draft'
-      ? ['submit']
-      : terminal
-        ? c.stage === 'rejected'
-          ? ['reopen']
-          : []
-        : c.onHold
-          ? ['resume']
-          : ['advance', 'return', 'reject', 'hold'];
+  const reviewStages = c.reviewStages ?? [];
+  // Parallel review is driven by the per-stage review screens, so the sequential workflow buttons
+  // are only relevant for a legacy/sequential case (not in the review/sap/draft phases).
+  const parallelPhase = ['review', 'sap', 'draft'].includes(c.stage);
+  const actions = parallelPhase
+    ? []
+    : terminal
+      ? c.stage === 'rejected'
+        ? ['reopen']
+        : []
+      : c.onHold
+        ? ['resume']
+        : ['advance', 'return', 'reject', 'hold'];
   const openItems = c.checklist.filter((i) => !i.done).length;
+  const isOwner = meId !== '' && meId === c.createdById;
+  // Stages that a reviewer sent back to the proposer (they need to edit & resubmit those).
+  const sentBackStages = reviewStages.filter((s) => c.stages?.[s]?.status === 'sent_back');
+  const sentBack = sentBackStages.length > 0;
+  const lastReturn = [...c.activity]
+    .reverse()
+    .find((a) => /_sendback$|^return$|infosec_returned/.test(a.action));
+  const canEditDraft = isOwner && (c.stage === 'draft' || sentBack);
 
   return (
     <main className="wrap">
       <p className="crumbs">
-        <a href="/cases">← Cases</a>
+        <Link href="/cases">Cases</Link>
       </p>
       <div className="topbar">
         <div>
@@ -219,6 +513,11 @@ export default function CaseDetail() {
           </p>
         </div>
         <div className="req__actions">
+          {canEditDraft && (
+            <Link className="btn btn--sm" href={`/cases/new?id=${c.id}`}>
+              Edit &amp; resubmit
+            </Link>
+          )}
           {actions.map((a) => (
             <button
               key={a}
@@ -240,6 +539,25 @@ export default function CaseDetail() {
           )}
         </div>
       </div>
+      {sentBack && (
+        <div className="namematch namematch--warn">
+          <strong>Changes requested ({sentBackStages.join(', ')}).</strong>{' '}
+          {lastReturn?.note || 'A reviewer asked for changes before this case can proceed.'}
+          {canEditDraft && (
+            <>
+              {' '}
+              <Link href={`/cases/new?id=${c.id}`}>Edit the case</Link> and resubmit.
+            </>
+          )}
+        </div>
+      )}
+      {(c.stage === 'review' ||
+        c.stage === 'sap' ||
+        c.stage === 'approved' ||
+        c.stage === 'rejected') &&
+        reviewStages.length > 0 && (
+          <ParallelReview stages={c.stages ?? {}} reviewStages={reviewStages} caseStage={c.stage} />
+        )}
       {c.stage === 'approved' && (
         <p className="note">
           Vendor status:{' '}
@@ -261,24 +579,29 @@ export default function CaseDetail() {
         <h2>Vendor details</h2>
         <div className="grid2">
           <div>
-            PAN <code>{c.pan ?? '—'}</code>
+            Legal name <strong>{c.legalName}</strong>
+          </div>
+          <div>Trade name {c.tradeName ?? '-'}</div>
+          <div className="span2">Business address {c.businessAddress ?? '-'}</div>
+          <div>
+            GSTIN <code>{c.gstin ?? '-'}</code>
+          </div>
+          <div>Contact {c.contactEmail ?? '-'}</div>
+          <div>
+            PAN <code>{c.pan ?? '-'}</code>
           </div>
           <div>
-            GSTIN <code>{c.gstin ?? '—'}</code>
+            IFSC <code>{c.ifsc ?? '-'}</code>
           </div>
           <div>
-            IFSC <code>{c.ifsc ?? '—'}</code>
+            Bank a/c <code>{c.bankAccount ?? '-'}</code>
           </div>
-          <div>
-            Bank a/c <code>{c.bankAccount ?? '—'}</code>
-          </div>
-          <div>Contact {c.contactEmail ?? '—'}</div>
           <div>Spend USD {c.spend.toLocaleString()}</div>
         </div>
         <p className="muted">
           Category: {c.categoryKey} · risk score {c.riskScore}
         </p>
-        <p>{c.justification}</p>
+        {c.justification && <p>{c.justification}</p>}
       </section>
 
       <section className="card">
@@ -294,16 +617,16 @@ export default function CaseDetail() {
           <>
             <div className="grid2">
               <div>
-                PAN: <span className="pill">{ver.panStatus ?? '—'}</span>
+                PAN: <span className="pill">{ver.panStatus ?? '-'}</span>
               </div>
               <div>
-                GST: <span className="pill">{ver.gstStatus ?? '—'}</span>
+                GST: <span className="pill">{ver.gstStatus ?? '-'}</span>
               </div>
               <div>
-                Bank: <span className="pill">{ver.bankStatus ?? '—'}</span>
+                Bank: <span className="pill">{ver.bankStatus ?? '-'}</span>
               </div>
               <div>
-                Name match: <span className="pill">{ver.nameMatchVerdict ?? '—'}</span>
+                Name match: <span className="pill">{ver.nameMatchVerdict ?? '-'}</span>
                 {ver.nameMatchScore != null && ` (${ver.nameMatchScore.toFixed(2)})`}
               </div>
             </div>
@@ -311,8 +634,11 @@ export default function CaseDetail() {
             <ul className="timeline">
               {ver.crossChecks.map((x) => (
                 <li key={x.key}>
-                  {x.ok ? '✓' : '✗'} {x.label}
-                  {x.detail ? ` — ${x.detail}` : ''}
+                  <span className={`pill ${x.ok ? 'pill--ok' : 'pill--draft'}`}>
+                    {x.ok ? 'Pass' : 'Fail'}
+                  </span>{' '}
+                  {x.label}
+                  {x.detail ? ` · ${x.detail}` : ''}
                 </li>
               ))}
             </ul>
@@ -386,7 +712,7 @@ export default function CaseDetail() {
             }}
           />
         </div>
-        <p className="muted tiny">PDF/JPG/PNG only — validated by content and malware-scanned.</p>
+        <p className="muted tiny">PDF/JPG/PNG only · validated by content and malware-scanned.</p>
         <table className="tbl">
           <thead>
             <tr>
@@ -438,7 +764,8 @@ export default function CaseDetail() {
         <ul className="timeline">
           {c.activity.map((a, i) => (
             <li key={i}>
-              <span className="muted">{new Date(a.at).toLocaleString()}</span> —{' '}
+              <span className="muted">{new Date(a.at).toLocaleString()}</span>
+              {' · '}
               <strong>{a.action}</strong>
               {a.fromStage && a.toStage && a.fromStage !== a.toStage && (
                 <>
@@ -456,7 +783,7 @@ export default function CaseDetail() {
         <h2>Comments</h2>
         {c.comments.map((m) => (
           <p key={m.id}>
-            <span className="muted">{new Date(m.at).toLocaleString()}</span> — {m.body}
+            <span className="muted">{new Date(m.at).toLocaleString()}</span> · {m.body}
           </p>
         ))}
         <div className="req__actions">

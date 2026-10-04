@@ -14,7 +14,10 @@ export class LifecycleService {
   ) {}
 
   private async approvedCase(caseId: string) {
-    const c = await this.prisma.case.findUnique({ where: { id: caseId } });
+    const c = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      include: { general: { select: { legalName: true } } },
+    });
     if (!c) throw new NotFoundException('Case not found.');
     if (c.stage !== 'approved') {
       throw new BadRequestException(
@@ -40,7 +43,7 @@ export class LifecycleService {
     await this.notifications.notify(
       c.createdById,
       'vendor.blocked',
-      `Vendor ${c.legalName} (${c.ref}) has been blocked.`,
+      `Vendor ${c.general?.legalName ?? c.ref} (${c.ref}) has been blocked.`,
       `/cases/${caseId}`,
     );
     return { vendorStatus: 'BLOCKED' };
@@ -62,7 +65,7 @@ export class LifecycleService {
     await this.notifications.notify(
       c.createdById,
       'vendor.reactivated',
-      `Vendor ${c.legalName} (${c.ref}) has been reactivated.`,
+      `Vendor ${c.general?.legalName ?? c.ref} (${c.ref}) has been reactivated.`,
       `/cases/${caseId}`,
     );
     return { vendorStatus: 'ACTIVE' };

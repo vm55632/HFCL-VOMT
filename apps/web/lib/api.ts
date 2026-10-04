@@ -1,4 +1,7 @@
-// Minimal API client. All requests send the session cookie (credentials: include).
+// Minimal API client. Sends the session cookie (credentials: include) and, when Supabase Auth is
+// configured, a Bearer access token so the API can verify the Supabase-issued JWT.
+import { getAccessToken, supabaseAuthEnabled } from './supabase';
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 export class ApiError extends Error {
@@ -11,9 +14,14 @@ export class ApiError extends Error {
 }
 
 export async function apiFetch<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
+  const authHeader: Record<string, string> = {};
+  if (supabaseAuthEnabled) {
+    const token = await getAccessToken();
+    if (token) authHeader.Authorization = `Bearer ${token}`;
+  }
   const res = await fetch(`${API_BASE}${path}`, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+    headers: { 'Content-Type': 'application/json', ...authHeader, ...(options.headers ?? {}) },
     ...options,
   });
   const text = await res.text();

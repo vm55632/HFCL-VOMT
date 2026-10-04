@@ -30,6 +30,7 @@ const KeyDriver = z
   .enum(['local', 'vault-transit', 'azure-kv', 'aws-kms', 'gcp-kms'])
   .default('local');
 const VerificationDriver = z.enum(['mock', 'aggregator']).default('mock');
+const AuthDriver = z.enum(['session', 'supabase']).default('session');
 
 /**
  * The complete environment surface. Every VOP_* variable lives here — nothing is read
@@ -114,6 +115,14 @@ export const envSchema = z
     VOP_SAML_CERT: z.string().optional(),
     VOP_LOCAL_LOGIN_ENABLED: boolish(false),
 
+    // authentication driver: `session` = built-in cookie sessions (local/OIDC/SAML);
+    // `supabase` = verify Supabase-issued JWTs and map to the app user (RBAC stays app-side).
+    VOP_AUTH_DRIVER: AuthDriver,
+    VOP_SUPABASE_URL: z.string().url().optional(),
+    VOP_SUPABASE_ANON_KEY: z.string().optional(),
+    VOP_SUPABASE_JWT_SECRET: z.string().optional(),
+    VOP_SUPABASE_SERVICE_ROLE_KEY: z.string().optional(),
+
     // observability
     VOP_LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
     VOP_OTEL_ENABLED: boolish(false),
@@ -121,6 +130,18 @@ export const envSchema = z
 
     // cors (comma-separated allow-list, never *)
     VOP_CORS_ORIGINS: z.string().default('http://localhost:3001'),
+
+    // PAN verification via EY Nexus CVR-API (real adapter). Credentials are secrets.
+    VOP_PAN_VERIFY_ENABLED: boolish(false),
+    VOP_EY_NEXUS_BASE_URL: z.string().url().default('https://nexus-in.ey.com'),
+    VOP_EY_NEXUS_USERNAME: z.string().optional(),
+    VOP_EY_NEXUS_PASSWORD: z.string().optional(),
+    VOP_EY_NEXUS_TOKEN: z.string().optional(),
+    VOP_EY_PAN_SERVICE_TYPE_ID: z.string().default('66'),
+    VOP_EY_GST_BY_PAN_SERVICE_TYPE_ID: z.string().default('12'),
+    VOP_EY_GST_VERIFY_SERVICE_TYPE_ID: z.string().default('30'),
+    VOP_EY_BANK_VERIFY_SERVICE_TYPE_ID: z.string().default('27'),
+    VOP_EY_MSME_SERVICE_TYPE_ID: z.string().default('92'),
   })
   .superRefine((env, ctx) => {
     const prod = env.NODE_ENV === 'production';
@@ -162,6 +183,26 @@ export const envSchema = z
         path: ['VOP_MASTER_KEY'],
         message: 'VOP_MASTER_KEY is required when VOP_KEY_DRIVER=local.',
       });
+    }
+    // Supabase auth needs the project URL and a way to verify tokens.
+    if (env.VOP_AUTH_DRIVER === 'supabase') {
+      if (!env.VOP_SUPABASE_URL) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['VOP_SUPABASE_URL'],
+          message: 'VOP_SUPABASE_URL is required when VOP_AUTH_DRIVER=supabase.',
+        });
+      }
+      // Token verification needs either the JWT secret (fast, local HS256) or the anon key
+      // (remote verification via /auth/v1/user). At least one must be present.
+      if (!env.VOP_SUPABASE_JWT_SECRET && !env.VOP_SUPABASE_ANON_KEY) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['VOP_SUPABASE_JWT_SECRET'],
+          message:
+            'Provide VOP_SUPABASE_JWT_SECRET or VOP_SUPABASE_ANON_KEY to verify Supabase tokens.',
+        });
+      }
     }
   });
 

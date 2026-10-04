@@ -9,6 +9,11 @@ export enum RoleKey {
   Procurement = 'procurement',
   Finance = 'finance',
   Compliance = 'compliance',
+  InfoSec = 'infosec',
+  Fcu = 'fcu',
+  Operation = 'operation',
+  Legal = 'legal',
+  Sap = 'sap',
   Auditor = 'auditor',
   Vendor = 'vendor',
 }
@@ -94,6 +99,46 @@ export const ROLES: Record<RoleKey, RoleDefinition> = {
     description: 'KYC, sanctions and conflict-of-interest stage.',
     builtIn: true,
     permissions: [...REVIEW, P.VendorViewSensitive, P.DocumentDownload],
+  },
+  [RoleKey.InfoSec]: {
+    key: RoleKey.InfoSec,
+    label: 'Information Security',
+    description:
+      'Reviews cases needing IT / network / application / PII access and approves, rejects or returns them before onboarding proceeds. Cannot view sensitive financial identifiers.',
+    builtIn: true,
+    permissions: [...REVIEW],
+  },
+  [RoleKey.Fcu]: {
+    key: RoleKey.Fcu,
+    label: 'FCU (Fraud Control Unit)',
+    description:
+      'Parallel fraud-control review of a submitted case. Approves, rejects or returns its FCU stage.',
+    builtIn: true,
+    permissions: [...REVIEW, P.DocumentDownload],
+  },
+  [RoleKey.Operation]: {
+    key: RoleKey.Operation,
+    label: 'Operation',
+    description:
+      'Parallel operations review of a submitted case. Approves, rejects or returns its Operation stage.',
+    builtIn: true,
+    permissions: [...REVIEW, P.DocumentDownload],
+  },
+  [RoleKey.Legal]: {
+    key: RoleKey.Legal,
+    label: 'Legal',
+    description:
+      'Parallel legal review; drafts the vendor agreement and approves, rejects or returns its Legal stage.',
+    builtIn: true,
+    permissions: [...REVIEW, P.DocumentUpload, P.DocumentDownload],
+  },
+  [RoleKey.Sap]: {
+    key: RoleKey.Sap,
+    label: 'SAP Confirmation',
+    description:
+      'Final confirmation stage. Sees every parallel stage’s completion and confirms the vendor into SAP/ERP once all are approved.',
+    builtIn: true,
+    permissions: [...REVIEW, P.DocumentDownload],
   },
   [RoleKey.Auditor]: {
     key: RoleKey.Auditor,

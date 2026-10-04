@@ -22,108 +22,100 @@ export const DEFAULT_WORKFLOW_KEY = 'standard-vendor';
 const STD_DOCS = ['pan_card', 'gst_certificate', 'cancelled_cheque'];
 const STD_CHECKS = ['pan', 'gstin', 'bank'];
 
+/** A sub-category (VOMT account group) under a parent vendor category. */
+export interface SubCategoryDef {
+  key: string;
+  name: string;
+  categoryKey: string;
+  sortOrder: number;
+}
+
+/**
+ * Vendor categories = SAP `Vendor_AccountGroupName`. Each may have one or more sub-categories
+ * (`DEFAULT_SUBCATEGORIES` below) = the `VOMT_VendorAccountGroupName` mappings. All route through
+ * the standard workflow; admins can re-point, flag EDD, or edit docs/checks per category.
+ */
 export const DEFAULT_CATEGORIES: VendorCategoryDef[] = [
-  {
-    key: 'goods_manufacturer',
-    name: 'Goods supplier / Manufacturer',
-    description: 'Supplies goods or manufactures products.',
-    sortOrder: 10,
-    enhancedDueDiligence: false,
-    requiredDocuments: STD_DOCS,
-    requiredValidations: STD_CHECKS,
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'service_provider',
-    name: 'Service provider',
-    description: 'Provides services under contract.',
-    sortOrder: 20,
-    enhancedDueDiligence: false,
-    requiredDocuments: STD_DOCS,
-    requiredValidations: STD_CHECKS,
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'contractor',
-    name: 'Contractor / Sub-contractor',
-    description: 'Executes works or sub-contracts.',
-    sortOrder: 30,
-    enhancedDueDiligence: false,
-    requiredDocuments: [...STD_DOCS, 'insurance'],
-    requiredValidations: STD_CHECKS,
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'consultant',
-    name: 'Consultant / Professional',
-    description: 'Individual or firm providing professional services.',
-    sortOrder: 40,
-    enhancedDueDiligence: false,
-    requiredDocuments: STD_DOCS,
-    requiredValidations: STD_CHECKS,
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'logistics',
-    name: 'Logistics / Transport',
-    description: 'Freight, transport and logistics.',
-    sortOrder: 50,
-    enhancedDueDiligence: false,
-    requiredDocuments: STD_DOCS,
-    requiredValidations: STD_CHECKS,
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'it_saas',
-    name: 'IT / Software / SaaS',
-    description: 'Software, SaaS and IT services.',
-    sortOrder: 60,
-    enhancedDueDiligence: false,
-    requiredDocuments: STD_DOCS,
-    requiredValidations: STD_CHECKS,
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'one_time',
-    name: 'One-time vendor',
-    description: 'Single-transaction vendor.',
-    sortOrder: 70,
-    enhancedDueDiligence: false,
+  cat('plant_vendor', 'Plant Vendor', 10),
+  cat('onetime_vendor', 'One time Vendor', 20, {
     requiredDocuments: ['pan_card', 'cancelled_cheque'],
     requiredValidations: ['pan', 'bank'],
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'foreign',
-    name: 'Foreign vendor (non-resident)',
-    description: 'Non-resident vendor; GST may not apply (FEMA / tax residency checks).',
-    sortOrder: 80,
+  }),
+  cat('gst_partner', 'GST partner', 30),
+  cat('vendor_rent', 'Vendor Rent', 40),
+  cat('vendor_collection', 'Vendor Collection', 50),
+  cat('vendor_legal_professional', 'Vendor Legal & Professional', 60),
+  cat('vendor_dsa', 'Vendor DSA', 70),
+  cat('vendor_dealer_twl', 'Vendor Dealer TWL', 80),
+  cat('vendor_dealer_ucl', 'Vendor Dealer UCL', 90),
+  cat('vendor_foreign_creditor', 'Vendor Foreign', 100, {
     enhancedDueDiligence: true,
     requiredDocuments: ['tax_residency_certificate', 'bank_details'],
     requiredValidations: ['bank'],
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'government_psu',
-    name: 'Government / PSU',
-    description: 'Government body or public-sector undertaking.',
-    sortOrder: 90,
+  }),
+  cat('vendor_employees_on_roll', 'Vendor Employees On Roll', 110),
+  cat('vendor_employees_off_roll', 'Vendor Employees off Roll', 120),
+  cat('vendor_others_domestic', 'Vendor Others Domestic', 130),
+  cat('vendor_intercompany', 'Vendor Intercompany', 140),
+  cat('vendor_employees_joining_bonus', 'Vendor Employees Joining Bonus', 150),
+  cat('vendor_dealer_ecv', 'Vendor Dealer ECV', 160),
+  cat('vendor_dealer_ncl', 'Vendor Dealer NCL', 170),
+];
+
+/** Sub-categories (VOMT account groups) keyed to their parent category. */
+export const DEFAULT_SUBCATEGORIES: SubCategoryDef[] = [
+  sub('onetime_vendor', 'Onetime Vendors', 10),
+  sub('vendor_rent', 'Vendor Rent', 10),
+  sub('vendor_collection', 'Collection Agency', 10),
+  sub('vendor_collection', 'Vendor Collection', 20),
+  sub('vendor_legal_professional', 'Vendor Legal & Professional', 10),
+  sub('vendor_dsa', 'Dealer Sales Manager', 10),
+  sub('vendor_dealer_twl', 'Used Two Wheeler Dealer or Multi Brand Outlet', 10),
+  sub('vendor_dealer_twl', 'Two Wheeler Dealer - New Two Wheeler Loan', 20),
+  sub('vendor_dealer_twl', 'Electric Two Wheeler Dealer - Electric Two Wheeler Loan', 30),
+  sub('vendor_dealer_ucl', 'Used Car Loan - DSA or Dealer', 10),
+  sub('vendor_dealer_ucl', 'Used Car Loan Dealer (OEM backed dealer)', 20),
+  sub('vendor_foreign_creditor', 'Foreign Vendors', 10),
+  sub(
+    'vendor_others_domestic',
+    'Utility Vendors (Inclusive of Central or State Govt or Local Bodies or Regulators or Statutory Authority or Judiciary etc.)',
+    10,
+  ),
+  sub('vendor_others_domestic', 'Vendor Others Domestic', 20),
+  sub('vendor_dealer_ecv', 'Vendor Dealer ECV', 10),
+  sub('vendor_dealer_ncl', 'New Car Loan Dealer', 10),
+  sub('vendor_dealer_ncl', 'New Car Loan DSA', 20),
+];
+
+/** Build a category def with standard defaults. */
+function cat(
+  key: string,
+  name: string,
+  sortOrder: number,
+  overrides: Partial<VendorCategoryDef> = {},
+): VendorCategoryDef {
+  return {
+    key,
+    name,
+    description: '',
+    sortOrder,
     enhancedDueDiligence: false,
-    requiredDocuments: ['pan_card', 'bank_details'],
-    requiredValidations: ['pan', 'bank'],
-    workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-  {
-    key: 'related_party',
-    name: 'Related party',
-    description: 'Related party — triggers enhanced due diligence.',
-    sortOrder: 100,
-    enhancedDueDiligence: true,
-    requiredDocuments: [...STD_DOCS, 'related_party_declaration'],
+    requiredDocuments: STD_DOCS,
     requiredValidations: STD_CHECKS,
     workflowKey: DEFAULT_WORKFLOW_KEY,
-  },
-];
+    ...overrides,
+  };
+}
+
+/** Build a sub-category def; key = `<categoryKey>__<slug(name)>`. */
+function sub(categoryKey: string, name: string, sortOrder: number): SubCategoryDef {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 60);
+  return { key: `${categoryKey}__${slug}`, name, categoryKey, sortOrder };
+}
 
 /**
  * The default workflow, version 1, PUBLISHED. Mirrors the reference prototype's spine but as a

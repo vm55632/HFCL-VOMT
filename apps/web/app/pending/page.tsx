@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function Pending() {
   return (
     <main className="wrap narrow">
@@ -10,9 +12,9 @@ export default function Pending() {
         This follows the platform’s Segregation-of-Duties policy: access is granted only after an
         authorised approval, never automatically.
       </p>
-      <a className="btn" href="/sign-in">
+      <Link className="btn" href="/sign-in">
         Back to sign in
-      </a>
+      </Link>
     </main>
   );
 }

@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch, ApiError } from '../../../lib/api';
@@ -76,10 +77,10 @@ export default function CategoriesAdmin() {
   return (
     <main className="wrap">
       <p className="crumbs">
-        <a href="/console">← Console</a> · <a href="/admin/workflows">Workflows</a>
+        <Link href="/console">Console</Link> · <Link href="/admin/workflows">Workflows</Link>
       </p>
       <h1>Vendor categories</h1>
-      <p className="lead">Master data for the intake form — {rows.length} categories.</p>
+      <p className="lead">Master data for the intake form · {rows.length} categories.</p>
       {msg && (
         <p className="note" role="status">
           {msg}
@@ -135,41 +136,45 @@ export default function CategoriesAdmin() {
 
       <section className="card">
         <h2>All categories</h2>
-        <table className="tbl">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Key</th>
-              <th>Workflow</th>
-              <th>Flags</th>
-              <th>Status</th>
-              <th />
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((c) => (
-              <tr key={c.key} style={{ opacity: c.active ? 1 : 0.5 }}>
-                <td>
-                  {c.name}
-                  <div className="muted">{c.requiredValidations.join(', ')}</div>
-                </td>
-                <td>
-                  <code>{c.key}</code>
-                </td>
-                <td>{c.workflowKey}</td>
-                <td>{c.enhancedDueDiligence ? <span className="pill">enhanced DD</span> : '—'}</td>
-                <td>
-                  <span className="pill">{c.active ? 'active' : 'inactive'}</span>
-                </td>
-                <td>
-                  <button className="btn btn--sm btn--ghost" onClick={() => void toggle(c)}>
-                    {c.active ? 'Deactivate' : 'Activate'}
-                  </button>
-                </td>
+        <div className="scroll-area">
+          <table className="tbl">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Key</th>
+                <th>Workflow</th>
+                <th>Flags</th>
+                <th>Status</th>
+                <th />
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.key} style={{ opacity: c.active ? 1 : 0.5 }}>
+                  <td>
+                    {c.name}
+                    <div className="muted">{c.requiredValidations.join(', ')}</div>
+                  </td>
+                  <td>
+                    <code>{c.key}</code>
+                  </td>
+                  <td>{c.workflowKey}</td>
+                  <td>
+                    {c.enhancedDueDiligence ? <span className="pill">enhanced DD</span> : '-'}
+                  </td>
+                  <td>
+                    <span className="pill">{c.active ? 'active' : 'inactive'}</span>
+                  </td>
+                  <td>
+                    <button className="btn btn--sm btn--ghost" onClick={() => void toggle(c)}>
+                      {c.active ? 'Deactivate' : 'Activate'}
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </section>
     </main>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { apiFetch, ApiError, API_BASE } from '../../lib/api';
 
@@ -48,7 +49,7 @@ export default function Audit() {
       );
       setChain(
         v.valid
-          ? '✓ Hash chain verified — no tampering detected.'
+          ? 'Hash chain verified · no tampering detected.'
           : `✗ Chain broken at ${v.brokenAt}: ${v.reason}`,
       );
     } catch (err) {
@@ -61,11 +62,11 @@ export default function Audit() {
   return (
     <main className="wrap">
       <p className="crumbs">
-        <a href="/console">← Console</a>
+        <Link href="/console">Console</Link>
       </p>
       <h1>Audit trail</h1>
       <p className="lead">
-        Append-only, hash-chained security &amp; decision log — {total} entries match.
+        Append-only, hash-chained security &amp; decision log · {total} entries match.
       </p>
       {msg && <p className="error">{msg}</p>}
 
@@ -123,11 +124,11 @@ export default function Audit() {
               <tr key={r.seq}>
                 <td className="muted">{r.seq}</td>
                 <td className="muted tiny">{new Date(r.at).toLocaleString()}</td>
-                <td className="tiny">{r.actorRole ?? r.actorId ?? '—'}</td>
+                <td className="tiny">{r.actorRole ?? r.actorId ?? '-'}</td>
                 <td>
                   <code>{r.action}</code>
                 </td>
-                <td className="muted tiny">{r.entityType ? `${r.entityType}` : '—'}</td>
+                <td className="muted tiny">{r.entityType ? `${r.entityType}` : '-'}</td>
                 <td>
                   <span className={`pill ${r.outcome === 'SUCCESS' ? 'pill--ok' : ''}`}>
                     {r.outcome}

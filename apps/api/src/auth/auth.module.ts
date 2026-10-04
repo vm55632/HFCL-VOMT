@@ -7,11 +7,20 @@ import { SessionService } from './session.service';
 import { JitService } from './jit.service';
 import { OidcService } from './oidc.service';
 import { SamlService } from './saml.service';
+import { SupabaseAuthService } from './supabase.service';
 
 @Module({
   imports: [RegistrationModule],
   controllers: [AuthController],
-  providers: [PasswordService, SessionService, JitService, OidcService, SamlService, AuthService],
-  exports: [SessionService, AuthService, PasswordService],
+  providers: [
+    PasswordService,
+    SessionService,
+    JitService,
+    OidcService,
+    SamlService,
+    SupabaseAuthService,
+    AuthService,
+  ],
+  exports: [SessionService, AuthService, PasswordService, SupabaseAuthService],
 })
 export class AuthModule {}

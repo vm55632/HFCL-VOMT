@@ -33,7 +33,10 @@ export class VerificationService {
   ) {}
 
   private async assertCanSee(actor: AuthUser, caseId: string) {
-    const c = await this.prisma.case.findUnique({ where: { id: caseId } });
+    const c = await this.prisma.case.findUnique({
+      where: { id: caseId },
+      include: { general: true },
+    });
     if (!c) throw new NotFoundException('Case not found.');
     if (
       !actor.permissions.has(PERMISSIONS.VendorReadAll) &&
@@ -67,24 +70,26 @@ export class VerificationService {
 
   async runForCase(actor: AuthUser, caseId: string) {
     const c = await this.assertCanSee(actor, caseId);
+    const g = c.general;
     const category = await this.prisma.vendorCategory.findUnique({ where: { key: c.categoryKey } });
 
-    const pan = c.panEnc ? await this.crypto.decryptFromString(c.panEnc) : undefined;
-    const bankAccount = c.bankAccountEnc
-      ? await this.crypto.decryptFromString(c.bankAccountEnc)
+    const legalName = g?.legalName ?? '';
+    const pan = g?.panEnc ? await this.crypto.decryptFromString(g.panEnc) : undefined;
+    const bankAccount = g?.bankAccountEnc
+      ? await this.crypto.decryptFromString(g.bankAccountEnc)
       : undefined;
 
     // Run the (mock) statutory checks. Missing identifiers are skipped.
     const panRes = pan
-      ? await this.attempt('pan', () => this.provider.pan({ pan, name: c.legalName }))
+      ? await this.attempt('pan', () => this.provider.pan({ pan, name: legalName }))
       : undefined;
-    const gstRes = c.gstin
-      ? await this.attempt('gstin', () => this.provider.gstin({ gstin: c.gstin! }))
+    const gstRes = g?.gstin
+      ? await this.attempt('gstin', () => this.provider.gstin({ gstin: g.gstin! }))
       : undefined;
     const bankRes =
-      bankAccount && c.ifsc
+      bankAccount && g?.ifsc
         ? await this.attempt('bank', () =>
-            this.provider.bank({ account: bankAccount, ifsc: c.ifsc!, name: c.legalName }),
+            this.provider.bank({ account: bankAccount, ifsc: g.ifsc!, name: legalName }),
           )
         : undefined;
 
@@ -113,27 +118,27 @@ export class VerificationService {
     const registryName =
       gstLegalName ??
       (panRes?.normalisedData as { nameOnRecord?: string } | undefined)?.nameOnRecord;
-    const score = registryName ? nameMatchScore(c.legalName, registryName) : undefined;
+    const score = registryName ? nameMatchScore(legalName, registryName) : undefined;
     const verdict = score !== undefined ? nameMatchVerdict(score) : undefined;
 
     const checks = crossChecks({
       vendorPan: pan,
-      gstin: c.gstin ?? undefined,
+      gstin: g?.gstin ?? undefined,
       panName: (panRes?.normalisedData as { nameOnRecord?: string } | undefined)?.nameOnRecord,
       gstLegalName: gstLegalName ?? undefined,
       bankHolderName: bankNameOnRecord ?? undefined,
     });
 
     // Assemble the red-flag context (DB lookups for employee / shared-bank matches).
-    const emailMatchesEmployee = c.contactEmail
-      ? (await this.prisma.user.count({ where: { email: c.contactEmail } })) > 0
+    const emailMatchesEmployee = g?.contactEmail
+      ? (await this.prisma.user.count({ where: { email: g.contactEmail } })) > 0
       : false;
-    const otherActiveCasesSharingBank = c.bankBlindIndex
-      ? await this.prisma.case.count({
+    const otherActiveCasesSharingBank = g?.bankBlindIndex
+      ? await this.prisma.caseGeneral.count({
           where: {
-            bankBlindIndex: c.bankBlindIndex,
-            id: { not: caseId },
-            stage: { not: 'rejected' },
+            bankBlindIndex: g.bankBlindIndex,
+            caseId: { not: caseId },
+            case: { stage: { not: 'rejected' } },
           },
         })
       : 0;
@@ -142,7 +147,7 @@ export class VerificationService {
       emailMatchesEmployee,
       otherActiveCasesSharingBank,
       gstStatus,
-      spend: c.spend,
+      spend: g?.spend ?? 0,
       panGstNameMismatch: verdict === 'mismatch',
     });
 
@@ -154,16 +159,16 @@ export class VerificationService {
 
     // Feed the registry signals back into the risk model and re-tier the case (server authority).
     const riskInput: RiskInput = {
-      spend: c.spend,
-      dataAccess: c.dataAccess ?? undefined,
-      systemAccess: c.systemAccess ?? undefined,
-      subcontract: c.subcontract ?? undefined,
-      delivery: c.delivery ?? undefined,
-      screening: c.screening ?? undefined,
-      conflict: c.conflict ?? undefined,
-      litigation: c.litigation ?? undefined,
-      insurance: c.insurance ?? undefined,
-      certifications: c.certifications ?? undefined,
+      spend: g?.spend ?? 0,
+      dataAccess: g?.dataAccess ?? undefined,
+      systemAccess: g?.systemAccess ?? undefined,
+      subcontract: g?.subcontract ?? undefined,
+      delivery: g?.delivery ?? undefined,
+      screening: g?.screening ?? undefined,
+      conflict: g?.conflict ?? undefined,
+      litigation: g?.litigation ?? undefined,
+      insurance: g?.insurance ?? undefined,
+      certifications: g?.certifications ?? undefined,
       enhancedDueDiligence: category?.enhancedDueDiligence ?? false,
       gstStatus: gstStatus ?? undefined,
       panStatus: panStatus ?? undefined,
@@ -172,16 +177,21 @@ export class VerificationService {
     };
     const risk = assessRisk(riskInput);
 
+    // Case keeps the re-tiered result; the registry-derived detail lives on case_general.
     await this.prisma.case.update({
       where: { id: caseId },
       data: {
         tier: risk.tier,
         riskScore: risk.score,
-        panStatus,
-        gstStatus,
-        nameMatch: verdict === 'match' ? 'Yes' : verdict ? 'No' : null,
-        taxpayerType,
-        legalNameOnRecord: registryName ?? null,
+        general: {
+          update: {
+            panStatus,
+            gstStatus,
+            nameMatch: verdict === 'match' ? 'Yes' : verdict ? 'No' : null,
+            taxpayerType,
+            legalNameOnRecord: registryName ?? null,
+          },
+        },
       },
     });
 
@@ -245,13 +255,32 @@ export class VerificationService {
 
   /** Cases flagged for manual review (compliance/risk queue). */
   async reviewQueue() {
-    return this.prisma.caseVerification.findMany({
+    const rows = await this.prisma.caseVerification.findMany({
       where: { reviewRequired: true },
       orderBy: { verifiedAt: 'desc' },
       take: 100,
       include: {
-        case: { select: { id: true, ref: true, legalName: true, stage: true, tier: true } },
+        case: {
+          select: {
+            id: true,
+            ref: true,
+            stage: true,
+            tier: true,
+            general: { select: { legalName: true } },
+          },
+        },
       },
     });
+    // Flatten legalName onto the case so the response shape is unchanged.
+    return rows.map((r) => ({
+      ...r,
+      case: {
+        id: r.case.id,
+        ref: r.case.ref,
+        stage: r.case.stage,
+        tier: r.case.tier,
+        legalName: r.case.general?.legalName ?? '',
+      },
+    }));
   }
 }

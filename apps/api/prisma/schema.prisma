@@ -11,8 +11,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  // App runtime uses the transaction pooler (pgbouncer) for resilient pooling under concurrency.
+  url       = env("DATABASE_URL")
+  // Migrations / db push need a direct (session-pooler) connection.
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserStatus {
@@ -27,6 +30,7 @@ enum AuthMethod {
   SAML
   LOCAL
   VENDOR_OTP
+  SUPABASE
 }
 
 enum RegistrationStatus {
@@ -86,6 +90,7 @@ model User {
   status             UserStatus @default(PENDING_APPROVAL)
   authMethod         AuthMethod @default(OIDC) @map("auth_method")
   externalSubject    String?    @map("external_subject") // IdP `sub`
+  supabaseUserId     String?    @unique @map("supabase_user_id") @db.Uuid // Supabase auth.users id
   managerId          String?    @map("manager_id") @db.Char(26)
   mustChangePassword Boolean    @default(false) @map("must_change_password")
   pwSalt             String?    @map("pw_salt")
@@ -234,8 +239,58 @@ model VendorCategory {
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  subCategories VendorSubCategory[]
+
   @@index([active, sortOrder])
   @@map("vendor_category")
+}
+
+/// Externally-managed auth token for a third-party integration (e.g. the EY Nexus PAN API).
+/// The token is generated out-of-band and stored here; the app reads it to call the provider.
+model IntegrationToken {
+  provider  String    @id
+  token     String
+  expiresAt DateTime? @map("expires_at") @db.Timestamptz(6)
+  updatedAt DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("integration_token")
+}
+
+/// Cached third-party verification responses (EY PAN/GST/bank), to avoid repeat external API
+/// calls for the same identifier within the same scope and day. Security: the payload is
+/// envelope-encrypted at rest (PII — names, Aadhaar status, bank holder, address), and the
+/// identifier is stored only as a blind-index HMAC, never in plaintext. Entries expire at the
+/// end of the (IST) day and are scoped per requester/case so one user's lookup can't serve another.
+model VerificationCache {
+  id         String   @id @db.Char(26)
+  scope      String
+  kind       String
+  keyHash    String   @map("key_hash")
+  day        String   @db.Char(10)
+  payloadEnc String   @map("payload_enc")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+
+  @@unique([scope, kind, keyHash, day])
+  @@index([expiresAt])
+  @@map("verification_cache")
+}
+
+/// A sub-category (VOMT account group) under a vendor category. Picked on the intake form.
+model VendorSubCategory {
+  id          String   @id @db.Char(26)
+  key         String   @unique
+  name        String
+  categoryKey String   @map("category_key")
+  sortOrder   Int      @default(100) @map("sort_order")
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  category VendorCategory @relation(fields: [categoryKey], references: [key], onDelete: Cascade)
+
+  @@index([categoryKey, active, sortOrder])
+  @@map("vendor_sub_category")
 }
 
 /// A versioned workflow definition. In-flight cases keep executing the version they started on;
@@ -306,6 +361,7 @@ model Case {
   id              String    @id @db.Char(26)
   ref             String    @unique
   categoryKey     String    @map("category_key")
+  subCategoryKey  String?   @map("sub_category_key")
   workflowKey     String    @map("workflow_key")
   workflowVersion Int       @map("workflow_version")
 
@@ -323,54 +379,16 @@ model Case {
   erpRef       String?   @map("erp_ref")
 
   // ownership / timestamps
-  createdById String   @map("created_by_id") @db.Char(26)
-  submittedAt DateTime? @map("submitted_at") @db.Timestamptz(6)
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdById     String    @map("created_by_id") @db.Char(26)
+  lastUpdatedById String?   @map("last_updated_by_id") @db.Char(26)
+  submittedAt     DateTime? @map("submitted_at") @db.Timestamptz(6)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // vendor identity (non-sensitive)
-  legalName    String  @map("legal_name")
-  tradeName    String? @map("trade_name")
-  contactName  String? @map("contact_name")
-  contactEmail String? @map("contact_email")
-  contactPhone String? @map("contact_phone")
-
-  // statutory ids — PAN & bank account encrypted; GSTIN/IFSC stored plainly, blind-indexed for dedup
-  panEnc           String? @map("pan_enc")
-  panBlindIndex    String? @map("pan_blind_index")
-  gstin            String? @map("gstin")
-  gstinBlindIndex  String? @map("gstin_blind_index")
-  ifsc             String? @map("ifsc")
-  bankAccountEnc   String? @map("bank_account_enc")
-  bankBlindIndex   String? @map("bank_blind_index")
-
-  // engagement
-  businessUnit    String? @map("business_unit")
-  costCentre      String? @map("cost_centre")
-  spend           Int     @default(0)
-  contractMonths  Int?    @map("contract_months")
-  natureOfService String? @map("nature_of_service")
-  justification   String  @default("")
-  coiDeclared     Boolean @default(false) @map("coi_declared")
-  coiDetails      String? @map("coi_details")
-
-  // risk inputs
-  dataAccess     String? @map("data_access")
-  systemAccess   String? @map("system_access")
-  subcontract    String?
-  delivery       String?
-  screening      String?
-  conflict       String?
-  litigation     String?
-  insurance      String?
-  certifications String?
-
-  // registry-derived (populated by verification in Phase 4)
-  panStatus         String? @map("pan_status")
-  gstStatus         String? @map("gst_status")
-  nameMatch         String? @map("name_match")
-  taxpayerType      String? @map("taxpayer_type")
-  legalNameOnRecord String? @map("legal_name_on_record")
+  // information-security routing state (the questionnaire answers live on case_general)
+  infosecRequired    Boolean   @default(false) @map("infosec_required")
+  infosecClearedAt   DateTime? @map("infosec_cleared_at") @db.Timestamptz(6)
+  infosecClearedById String?   @map("infosec_cleared_by_id") @db.Char(26)
 
   checklist    CaseChecklistItem[]
   comments     CaseComment[]
@@ -378,12 +396,20 @@ model Case {
   documents    Document[]
   verification CaseVerification?
 
+  // normalized reporting structure (all keyed by case id)
+  general        CaseGeneral?
+  draftStage     CaseDraft?
+  infosecStage   CaseInfosec?
+  fcuStage       CaseFcu?
+  operationStage CaseOperation?
+  sapStage       CaseSap?
+  legalStage     CaseLegal?
+  responses      CaseVerificationResponse[]
+
   @@index([stage])
   @@index([createdById])
   @@index([assigneeId])
-  @@index([panBlindIndex])
-  @@index([gstinBlindIndex])
-  @@index([bankBlindIndex])
+  @@index([infosecRequired])
   @@map("case")
 }
 
@@ -501,4 +527,220 @@ model Notification {
 
   @@index([userId, read])
   @@map("notification")
+}
+
+/// Vendor master detail for a case (1:1 with `case`). The `case` table holds tracking/workflow
+/// state only; all vendor-entered and registry-derived detail lives here, keyed by case id.
+/// Sensitive identifiers keep the same protection as before: PAN / bank account / signatory PAN
+/// are envelope-encrypted, with blind-index HMACs for duplicate detection (ADR-0006).
+model CaseGeneral {
+  id     String @id @db.Char(26)
+  caseId String @unique @map("case_id") @db.Char(26)
+
+  // vendor identity (non-sensitive)
+  legalName       String  @map("legal_name")
+  tradeName       String? @map("trade_name")
+  businessAddress String? @map("business_address")
+
+  // business single point of contact (SPOC)
+  contactName  String? @map("contact_name")
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  // authorized signatory — PAN encrypted + blind-indexed; the rest stored plainly
+  signatoryName          String? @map("signatory_name")
+  signatoryEmail         String? @map("signatory_email")
+  signatoryMobile        String? @map("signatory_mobile")
+  signatoryPanEnc        String? @map("signatory_pan_enc")
+  signatoryPanBlindIndex String? @map("signatory_pan_blind_index")
+
+  // statutory ids — PAN & bank account encrypted; GSTIN/IFSC plain, blind-indexed for dedup
+  panEnc          String? @map("pan_enc")
+  panBlindIndex   String? @map("pan_blind_index")
+  gstin           String? @map("gstin")
+  gstinBlindIndex String? @map("gstin_blind_index")
+  ifsc            String? @map("ifsc")
+  bankName        String? @map("bank_name")
+  branch          String? @map("branch")
+  bankAccountEnc  String? @map("bank_account_enc")
+  bankBlindIndex  String? @map("bank_blind_index")
+
+  // engagement
+  businessUnit    String? @map("business_unit")
+  costCentre      String? @map("cost_centre")
+  spend           Int     @default(0)
+  contractMonths  Int?    @map("contract_months")
+  natureOfService String? @map("nature_of_service")
+  justification   String  @default("")
+  coiDeclared     Boolean @default(false) @map("coi_declared")
+  coiDetails      String? @map("coi_details")
+
+  // risk inputs
+  dataAccess     String? @map("data_access")
+  systemAccess   String? @map("system_access")
+  subcontract    String?
+  delivery       String?
+  screening      String?
+  conflict       String?
+  litigation     String?
+  insurance      String?
+  certifications String?
+
+  // information-security questionnaire answers (routing decision lives on `case`)
+  isecItHardware    Boolean @default(false) @map("isec_it_hardware")
+  isecItSoftware    Boolean @default(false) @map("isec_it_software")
+  isecAccessSystem  Boolean @default(false) @map("isec_access_system")
+  isecAccessNetwork Boolean @default(false) @map("isec_access_network")
+  isecAccessApps    Boolean @default(false) @map("isec_access_apps")
+  isecAccessPii     Boolean @default(false) @map("isec_access_pii")
+
+  // registry-derived (populated by verification)
+  panStatus         String? @map("pan_status")
+  gstStatus         String? @map("gst_status")
+  nameMatch         String? @map("name_match")
+  taxpayerType      String? @map("taxpayer_type")
+  legalNameOnRecord String? @map("legal_name_on_record")
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([panBlindIndex])
+  @@index([gstinBlindIndex])
+  @@index([bankBlindIndex])
+  @@index([signatoryPanBlindIndex])
+  @@map("case_general")
+}
+
+/// Per-stage record (1:1 with `case`). One table per workflow stage; each carries common
+/// tracking columns plus a `data` JSON for stage-specific fields (promote to named columns on
+/// request). A row is created/updated as the case enters/leaves the stage.
+model CaseDraft {
+  id           String    @id @db.Char(26)
+  caseId       String    @unique @map("case_id") @db.Char(26)
+  status       String    @default("pending")
+  decision     String?
+  remark       String?
+  actionedById String?   @map("actioned_by_id") @db.Char(26)
+  enteredAt    DateTime? @map("entered_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  data         Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_draft")
+}
+
+model CaseInfosec {
+  id           String    @id @db.Char(26)
+  caseId       String    @unique @map("case_id") @db.Char(26)
+  status       String    @default("pending")
+  decision     String?
+  remark       String?
+  actionedById String?   @map("actioned_by_id") @db.Char(26)
+  enteredAt    DateTime? @map("entered_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  data         Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_infosec")
+}
+
+model CaseFcu {
+  id           String    @id @db.Char(26)
+  caseId       String    @unique @map("case_id") @db.Char(26)
+  status       String    @default("pending")
+  decision     String?
+  remark       String?
+  actionedById String?   @map("actioned_by_id") @db.Char(26)
+  enteredAt    DateTime? @map("entered_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  data         Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_fcu")
+}
+
+model CaseOperation {
+  id           String    @id @db.Char(26)
+  caseId       String    @unique @map("case_id") @db.Char(26)
+  status       String    @default("pending")
+  decision     String?
+  remark       String?
+  actionedById String?   @map("actioned_by_id") @db.Char(26)
+  enteredAt    DateTime? @map("entered_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  data         Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_operation")
+}
+
+model CaseSap {
+  id           String    @id @db.Char(26)
+  caseId       String    @unique @map("case_id") @db.Char(26)
+  status       String    @default("pending")
+  decision     String?
+  remark       String?
+  actionedById String?   @map("actioned_by_id") @db.Char(26)
+  enteredAt    DateTime? @map("entered_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  data         Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_sap")
+}
+
+model CaseLegal {
+  id           String    @id @db.Char(26)
+  caseId       String    @unique @map("case_id") @db.Char(26)
+  status       String    @default("pending")
+  decision     String?
+  remark       String?
+  actionedById String?   @map("actioned_by_id") @db.Char(26)
+  enteredAt    DateTime? @map("entered_at") @db.Timestamptz(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamptz(6)
+  data         Json      @default("{}")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@map("case_legal")
+}
+
+/// Captured third-party verification responses shown on the form (PAN / GST / bank / MSME),
+/// persisted per case. The displayed/parsed payload is envelope-encrypted at rest; the looked-up
+/// identifier is kept only as a blind-index HMAC. One current row per case per kind (upserted).
+model CaseVerificationResponse {
+  id                   String   @id @db.Char(26)
+  caseId               String   @map("case_id") @db.Char(26)
+  kind                 String // pan | gst | bank | msme
+  identifierBlindIndex String?  @map("identifier_blind_index")
+  status               String?
+  verified             Boolean  @default(false)
+  payloadEnc           String   @map("payload_enc")
+  capturedById         String?  @map("captured_by_id") @db.Char(26)
+  capturedAt           DateTime @default(now()) @map("captured_at") @db.Timestamptz(6)
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, kind])
+  @@index([caseId])
+  @@map("case_verification_response")
 }

@@ -55,7 +55,23 @@ export interface AppConfig {
     saml: { enabled: boolean; entryPoint?: string; issuer?: string; cert?: string };
     localLoginEnabled: boolean;
   };
+  auth: {
+    driver: Env['VOP_AUTH_DRIVER'];
+    supabase: { url?: string; anonKey?: string; jwtSecret?: string; serviceRoleKey?: string };
+  };
   observability: { logLevel: Env['VOP_LOG_LEVEL']; otelEnabled: boolean; otelEndpoint?: string };
+  panVerify: {
+    enabled: boolean;
+    baseUrl: string;
+    username?: string;
+    password?: string;
+    token?: string;
+    serviceTypeId: string;
+    gstServiceTypeId: string;
+    gstVerifyServiceTypeId: string;
+    bankVerifyServiceTypeId: string;
+    msmeServiceTypeId: string;
+  };
 }
 
 function shape(env: Env): AppConfig {
@@ -125,10 +141,31 @@ function shape(env: Env): AppConfig {
       },
       localLoginEnabled: env.VOP_LOCAL_LOGIN_ENABLED,
     },
+    auth: {
+      driver: env.VOP_AUTH_DRIVER,
+      supabase: {
+        url: env.VOP_SUPABASE_URL,
+        anonKey: env.VOP_SUPABASE_ANON_KEY,
+        jwtSecret: env.VOP_SUPABASE_JWT_SECRET,
+        serviceRoleKey: env.VOP_SUPABASE_SERVICE_ROLE_KEY,
+      },
+    },
     observability: {
       logLevel: env.VOP_LOG_LEVEL,
       otelEnabled: env.VOP_OTEL_ENABLED,
       otelEndpoint: env.VOP_OTEL_EXPORTER_OTLP_ENDPOINT,
+    },
+    panVerify: {
+      enabled: env.VOP_PAN_VERIFY_ENABLED,
+      baseUrl: env.VOP_EY_NEXUS_BASE_URL,
+      username: env.VOP_EY_NEXUS_USERNAME,
+      password: env.VOP_EY_NEXUS_PASSWORD,
+      token: env.VOP_EY_NEXUS_TOKEN,
+      serviceTypeId: env.VOP_EY_PAN_SERVICE_TYPE_ID,
+      gstServiceTypeId: env.VOP_EY_GST_BY_PAN_SERVICE_TYPE_ID,
+      gstVerifyServiceTypeId: env.VOP_EY_GST_VERIFY_SERVICE_TYPE_ID,
+      bankVerifyServiceTypeId: env.VOP_EY_BANK_VERIFY_SERVICE_TYPE_ID,
+      msmeServiceTypeId: env.VOP_EY_MSME_SERVICE_TYPE_ID,
     },
   };
 }
