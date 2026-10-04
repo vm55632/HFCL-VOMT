@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { apiFetch, ApiError } from '../../../lib/api';
 import { validatePan, validateGstin, validateIfsc } from '@vop/shared';
@@ -179,6 +179,14 @@ const INFOSEC_QUESTIONS: { key: string; label: string }[] = [
 ];
 
 export default function NewCase() {
+  return (
+    <Suspense fallback={<main className="wrap" />}>
+      <NewCaseInner />
+    </Suspense>
+  );
+}
+
+function NewCaseInner() {
   const editId = useSearchParams()?.get('id') ?? '';
   const [cats, setCats] = useState<Category[]>([]);
   const [f, setF] = useState({ ...initial });

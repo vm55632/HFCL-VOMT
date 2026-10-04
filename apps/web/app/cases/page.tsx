@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { apiFetch, ApiError } from '../../lib/api';
 
@@ -19,6 +19,14 @@ interface CaseRow {
 }
 
 export default function Cases() {
+  return (
+    <Suspense fallback={<main className="wrap" />}>
+      <CasesInner />
+    </Suspense>
+  );
+}
+
+function CasesInner() {
   const [rows, setRows] = useState<CaseRow[]>([]);
   const [msg, setMsg] = useState<string | null>(null);
   const stageFilter = useSearchParams()?.get('stage') ?? '';
